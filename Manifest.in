@@ -1,2 +1,3 @@
 recursive-include src/autotrain/static *
 recursive-include src/autotrain/templates *
+include src/autotrain/cli/tui/styles.tcss

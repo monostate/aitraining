@@ -45,12 +45,12 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="accelerate")
 warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub")
 
 logger = Logger().get_logger()
-__version__ = "0.8.37.dev0"
+__version__ = "0.0.5"
 
 
 def is_colab():
     try:
-        import google.colab
+        pass
 
         return True
     except ImportError:
@@ -59,7 +59,7 @@ def is_colab():
 
 def is_unsloth_available():
     try:
-        from unsloth import FastLanguageModel
+        pass
 
         return True
     except Exception as e:

@@ -89,6 +89,59 @@ def train(config):
                     trust_remote_code=ALLOW_REMOTE_CODE,
                 )
 
+    # Apply max_samples to training data if specified (for testing/debugging)
+    if hasattr(config, "max_samples") and config.max_samples is not None and config.max_samples > 0:
+        original_size = len(train_data)
+
+        # Ensure balanced sampling for classification tasks
+        unique_labels = train_data.unique(config.target_column)
+        num_classes = len(unique_labels)
+        samples_per_class = config.max_samples // num_classes
+
+        # Collect balanced samples from each class
+        balanced_indices = []
+        for label in unique_labels:
+            # Get indices for this class
+            class_indices = [i for i, item in enumerate(train_data) if item[config.target_column] == label]
+            # Take up to samples_per_class from this class
+            selected = class_indices[:samples_per_class]
+            balanced_indices.extend(selected)
+            logger.info(f"  Class {label}: selected {len(selected)} samples")
+
+        # Sort indices to maintain order and select
+        balanced_indices.sort()
+        train_data = train_data.select(balanced_indices)
+        logger.info(
+            f"Limited training data from {original_size} to {len(train_data)} samples (max_samples={config.max_samples}, balanced across {num_classes} classes)"
+        )
+
+    # Apply max_samples to validation data if specified (proportionally)
+    if (
+        config.valid_split is not None
+        and hasattr(config, "max_samples")
+        and config.max_samples is not None
+        and config.max_samples > 0
+    ):
+        # Use 20% of max_samples for validation or less if validation set is smaller
+        valid_max_samples = max(1, int(config.max_samples * 0.2))
+        if len(valid_data) > valid_max_samples:
+            original_size = len(valid_data)
+
+            # Ensure balanced sampling for validation too
+            unique_labels = valid_data.unique(config.target_column)
+            num_classes = len(unique_labels)
+            samples_per_class = valid_max_samples // num_classes
+
+            balanced_indices = []
+            for label in unique_labels:
+                class_indices = [i for i, item in enumerate(valid_data) if item[config.target_column] == label]
+                selected = class_indices[:samples_per_class]
+                balanced_indices.extend(selected)
+
+            balanced_indices.sort()
+            valid_data = valid_data.select(balanced_indices)
+            logger.info(f"Limited validation data from {original_size} to {len(valid_data)} samples (balanced)")
+
     classes = train_data.features[config.target_column].names
     label2id = {c: i for i, c in enumerate(classes)}
     num_classes = len(classes)

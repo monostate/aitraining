@@ -3,7 +3,14 @@ import json
 import os
 
 import numpy as np
-from datasets import load_metric
+
+
+try:
+    from datasets import load_metric
+except ImportError:
+    # For newer versions of datasets
+    from evaluate import load as load_metric
+
 from transformers import EvalPrediction
 
 from autotrain import logger
@@ -300,14 +307,36 @@ def post_processing_function_qa(examples, features, predictions, version_2_with_
         config=config,
     )
     # Format the result to the format the metric expects.
+    # Ensure IDs are strings to match the expected format
     if version_2_with_negative:
         formatted_predictions = [
-            {"id": k, "prediction_text": v, "no_answer_probability": 0.0} for k, v in predictions.items()
+            {"id": str(k), "prediction_text": v, "no_answer_probability": 0.0} for k, v in predictions.items()
         ]
     else:
-        formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
+        formatted_predictions = [{"id": str(k), "prediction_text": v} for k, v in predictions.items()]
 
-    references = [{"id": str(ex["id"]), "answers": ex[config.answer_column]} for ex in examples]
+    # Parse answers if they are string representations of dicts
+    references = []
+    for ex in examples:
+        answer = ex[config.answer_column]
+        # Handle both dict format and string format
+        if isinstance(answer, str):
+            import ast
+
+            try:
+                # Use ast.literal_eval for safe parsing of string representations
+                answer = ast.literal_eval(answer)
+            except (ValueError, SyntaxError):
+                # If parsing fails, try JSON
+                import json
+
+                try:
+                    answer = json.loads(answer)
+                except json.JSONDecodeError:
+                    # If all parsing fails, create empty answer
+                    answer = {"answer_start": [], "text": []}
+        references.append({"id": str(ex["id"]), "answers": answer})
+
     return EvalPrediction(predictions=formatted_predictions, label_ids=references)
 
 
@@ -358,12 +387,16 @@ def prepare_qa_validation_features(examples, tokenizer, config):
     # Tokenize our examples with truncation and maybe padding, but keep the overflows using a stride. This results
     # in one example possible giving several features when a context is long, each of those features having a
     # context that overlaps a bit the context of the previous feature.
+
+    # Ensure stride is smaller than effective max length (accounting for special tokens)
+    effective_stride = min(config.max_doc_stride, max(1, config.max_seq_length - 3))
+
     tokenized_examples = tokenizer(
         examples[config.question_column if pad_on_right else config.text_column],
         examples[config.text_column if pad_on_right else config.question_column],
         truncation="only_second" if pad_on_right else "only_first",
         max_length=config.max_seq_length,
-        stride=config.max_doc_stride,
+        stride=effective_stride,
         return_overflowing_tokens=True,
         return_offsets_mapping=True,
         padding="max_length",

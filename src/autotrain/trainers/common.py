@@ -7,11 +7,12 @@ import os
 import shutil
 import time
 import traceback
+from typing import Optional
 
 import requests
 from accelerate import PartialState
 from huggingface_hub import HfApi
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from transformers import TrainerCallback, TrainerControl, TrainerState, TrainingArguments
 
 from autotrain import is_colab, logger
@@ -195,6 +196,7 @@ def monitor(func):
     2. Executes the wrapped function.
     3. If an exception occurs during the execution of the wrapped function, logs the error message and stack trace.
     4. Optionally pauses the execution if the environment variable 'PAUSE_ON_FAILURE' is set to 1.
+    5. RE-RAISES the exception so validation errors bubble up to the user (critical for UX).
 
     Args:
         func (callable): The function to be wrapped by the decorator.
@@ -216,6 +218,9 @@ def monitor(func):
             logger.error(str(e))
             if int(os.environ.get("PAUSE_ON_FAILURE", 1)) == 1:
                 pause_space(config, is_failure=True)
+            # CRITICAL: Re-raise the exception so users see validation errors
+            # This is essential for proper error handling and debugging
+            raise
 
     return wrapper
 
@@ -236,8 +241,22 @@ class AutoTrainParams(BaseModel):
             Raises ValueError if project_name is not alphanumeric (with hyphens allowed) or exceeds 50 characters.
     """
 
+    # W&B Visualizer
+    wandb_visualizer: Optional[bool] = Field(None, title="Enable W&B visualizer (LEET)")
+    wandb_token: Optional[str] = Field(None, title="W&B API Token")
+
     class Config:
         protected_namespaces = ()
+
+    @model_validator(mode="after")
+    def validate_wandb_visualizer(self):
+        """Set default for wandb_visualizer based on log param."""
+        if self.wandb_visualizer is None:
+            if hasattr(self, "log") and self.log == "wandb":
+                self.wandb_visualizer = True
+            else:
+                self.wandb_visualizer = False
+        return self
 
     def save(self, output_dir):
         """
@@ -260,17 +279,48 @@ class AutoTrainParams(BaseModel):
     def __init__(self, **data):
         """
         Initialize the parameters, check for unused/extra parameters and warn the user.
+
+        Also normalizes project_name path:
+        - If absolute path is provided, it's used as-is
+        - If relative/name only, it's placed in a 'trainings' directory adjacent to server
+        - Can be overridden with AUTOTRAIN_PROJECTS_DIR environment variable
         """
         super().__init__(**data)
 
-        if len(self.project_name) > 0:
-            # make sure project_name is always alphanumeric but can have hyphens. if not, raise ValueError
-            if not self.project_name.replace("-", "").isalnum():
-                raise ValueError("project_name must be alphanumeric but can contain hyphens")
+        import os
 
-        # project name cannot be more than 50 characters
-        if len(self.project_name) > 50:
-            raise ValueError("project_name cannot be more than 50 characters")
+        # Path normalization for project_name
+        if hasattr(self, "project_name") and self.project_name and len(self.project_name) > 0:
+            # If not an absolute path, normalize it
+            if not os.path.isabs(self.project_name):
+                # Get base directory from environment or use ../trainings relative to current directory
+                # This keeps training outputs separate from the server directory
+                base_dir = os.environ.get("AUTOTRAIN_PROJECTS_DIR")
+                if base_dir is None:
+                    # Create trainings directory at same level as server directory
+                    server_parent = os.path.dirname(os.getcwd())
+                    base_dir = os.path.join(server_parent, "trainings")
+
+                # Create base directory if it doesn't exist
+                os.makedirs(base_dir, exist_ok=True)
+
+                # Normalize the path
+                self.project_name = os.path.normpath(os.path.join(base_dir, self.project_name))
+
+                # Log the path normalization for transparency
+                if os.environ.get("AUTOTRAIN_TUI_MODE") != "1":
+                    logger.info(f"Project path normalized to: {self.project_name}")
+
+        if hasattr(self, "project_name") and self.project_name and len(self.project_name) > 0:
+            # make sure project_name is always alphanumeric but can have hyphens or underscores. if not, raise ValueError
+            # Only validate the basename, not the full path (for paths like /tmp/test_project)
+            project_basename = os.path.basename(self.project_name)
+            if not project_basename.replace("-", "").replace("_", "").isalnum():
+                raise ValueError("project_name must be alphanumeric but can contain hyphens or underscores")
+
+            # project name basename cannot be more than 50 characters
+            if len(project_basename) > 50:
+                raise ValueError("project_name basename cannot be more than 50 characters")
 
         # Parameters not supplied by the user
         defaults = set(self.model_fields.keys())

@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoTrain Inference</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="/static/styles/tailwind-replacement.css">
+    <link rel="stylesheet" href="/static/styles/inference.css">
+    <script>
+        // Apply dark mode based on system preference
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        // Listen for changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            if (e.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        window.HF_TOKEN = "{{ token }}";
+    </script>
+    <script src="/static/scripts/inference.js" defer></script>
+</head>
+
+<body class="bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-96 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <a href="/inference" class="flex flex-col w-full overflow-hidden">
+                <pre class="text-[0.4rem] text-orange-500 font-mono leading-none whitespace-pre overflow-hidden">{{ banner }}</pre>
+            </a>
+            <button id="refresh-models" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 self-start ml-2">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+
+        <!-- HuggingFace Hub Model Loader -->
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div class="mb-2">
+                <label for="hf-model-input" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Load HuggingFace Model
+                </label>
+                <div class="flex gap-2 mb-2">
+                    <input
+                        type="text"
+                        id="hf-model-input"
+                        name="model-name"
+                        autocomplete="off"
+                        placeholder="e.g., t5-small or username/model"
+                        class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    <button
+                        id="load-hf-model-btn"
+                        class="px-3 py-1 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded font-medium"
+                    >
+                        Load
+                    </button>
+                </div>
+                <!-- Optional HF Token Input (for private models) -->
+                <details class="text-xs">
+                    <summary class="cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
+                        Private model? Add token
+                    </summary>
+                    <div class="mt-2">
+                        <input
+                            type="password"
+                            id="hf-token-input"
+                            name="hf-token"
+                            autocomplete="current-password"
+                            placeholder="hf_..."
+                            class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                        />
+                        <p class="text-gray-500 dark:text-gray-400 mt-1">
+                            Token stored in session only (cleared on close)
+                        </p>
+                    </div>
+                </details>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+                Or select from your local models below
+            </p>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-2" id="model-list-container">
+            <!-- Models will be loaded here -->
+            <div class="text-center text-gray-500 text-sm mt-4">Loading models...</div>
+        </div>
+
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 text-center">
+            AITraining {{ version }}
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden">
+        <!-- Model Header -->
+        <div id="model-header" class="hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex justify-between items-center">
+            <div>
+                <h1 id="selected-model-name" class="text-xl font-bold">Select a model</h1>
+                <p id="selected-model-type" class="text-sm text-gray-500 dark:text-gray-400"></p>
+            </div>
+            <div id="model-info" class="text-sm text-gray-500 dark:text-gray-400">
+                <!-- Model details here -->
+            </div>
+        </div>
+
+        <!-- Interface Area -->
+        <div class="flex-1 flex overflow-hidden">
+            <!-- Center Panel (Input/Output) -->
+            <div id="inference-interface" class="flex-1 p-6 overflow-y-auto flex flex-col items-center justify-center text-gray-500">
+                <i class="fas fa-robot text-4xl mb-4"></i>
+                <p>Select a model from the sidebar to start inference</p>
+            </div>
+
+            <!-- Right Panel (Settings/Help) -->
+            <aside id="right-panel" class="w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 p-4 overflow-y-auto hidden">
+                <div class="mb-6">
+                    <h3 class="font-bold mb-2">About this Model</h3>
+                    <p id="model-description" class="text-sm text-gray-600 dark:text-gray-400"></p>
+                </div>
+
+                <div id="inference-settings" class="mb-6 hidden">
+                    <h3 class="font-bold mb-3 text-gray-900 dark:text-gray-100">Inference Settings</h3>
+
+                    <!-- Temperature -->
+                    <div class="mb-4">
+                        <label for="temperature" class="block text-sm font-medium mb-1">
+                            Temperature <span class="text-gray-500" id="temp-value">0.7</span>
+                        </label>
+                        <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>Focused</span>
+                            <span>Creative</span>
+                        </div>
+                    </div>
+
+                    <!-- Max Tokens -->
+                    <div class="mb-4">
+                        <label for="max-tokens" class="block text-sm font-medium mb-1">
+                            Max Tokens <span class="text-gray-500" id="tokens-value">512</span>
+                        </label>
+                        <input type="range" id="max-tokens" min="50" max="2048" step="50" value="512">
+                    </div>
+
+                    <!-- Top P -->
+                    <div class="mb-4">
+                        <label for="top-p" class="block text-sm font-medium mb-1">
+                            Top P <span class="text-gray-500" id="topp-value">0.95</span>
+                        </label>
+                        <input type="range" id="top-p" min="0" max="1" step="0.05" value="0.95">
+                    </div>
+
+                    <!-- Top K -->
+                    <div class="mb-4">
+                        <label for="top-k" class="block text-sm font-medium mb-1">
+                            Top K <span class="text-gray-500" id="topk-value">50</span>
+                        </label>
+                        <input type="range" id="top-k" min="0" max="100" step="5" value="50">
+                    </div>
+
+                    <!-- Do Sample Toggle -->
+                    <div class="mb-4 flex items-center justify-between">
+                        <label for="do-sample" class="text-sm font-medium">Sampling <span class="text-gray-500" id="sampling-value">On</span></label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="do-sample" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                        </label>
+                    </div>
+
+                    <!-- System Prompt (for LLMs) -->
+                    <div class="mb-4" id="system-prompt-container">
+                        <label for="system-prompt" class="block text-sm font-medium mb-1">System Prompt</label>
+                        <textarea id="system-prompt" rows="3"
+                                  class="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700"
+                                  placeholder="You are a helpful assistant..."></textarea>
+                    </div>
+
+                    <!-- Reset to defaults -->
+                    <button id="reset-settings" class="w-full text-sm py-2 px-3 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Reset to Defaults
+                    </button>
+                </div>
+
+                <div>
+                    <h3 class="font-bold mb-2">Examples</h3>
+                    <div id="example-inputs" class="space-y-2">
+                        <!-- Example inputs -->
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <!-- Templates for dynamic content -->
+    <template id="model-item-template">
+        <div class="model-item p-2 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 mb-1">
+            <div class="font-medium model-id truncate"></div>
+            <div class="text-xs text-gray-500 model-type"></div>
+        </div>
+    </template>
+
+    <!-- LLM Interface Template -->
+    <template id="llm-interface-template">
+        <div class="w-full max-w-4xl flex flex-col h-full">
+            <div id="chat-history" class="flex-1 overflow-y-auto mb-4 space-y-4 p-4 rounded bg-gray-50 dark:bg-gray-900">
+                <!-- Messages go here -->
+            </div>
+            <div class="flex gap-2">
+                <textarea id="llm-input" class="flex-1 p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="Type your message..."></textarea>
+                <button id="llm-send-btn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- Text Classification Interface Template -->
+    <template id="text-classification-interface-template">
+        <div class="w-full max-w-2xl flex flex-col gap-4">
+            <div class="w-full">
+                <label class="block mb-2 text-sm font-medium">Input Text</label>
+                <textarea id="text-input" class="w-full p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700" rows="5" placeholder="Enter text to classify..."></textarea>
+            </div>
+            <button id="classify-btn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 self-end">
+                Classify
+            </button>
+            <div id="classification-results" class="hidden w-full p-4 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold mb-2">Results</h3>
+                <div id="class-probabilities" class="space-y-2"></div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Image Upload Template (Shared) -->
+    <template id="image-upload-template">
+        <div class="w-full max-w-2xl flex flex-col gap-4 items-center">
+            <div class="flex items-center justify-center w-full">
+                <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-bray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg class="w-8 h-8 mb-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                        </svg>
+                        <p class="mb-2 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">SVG, PNG, JPG or GIF</p>
+                    </div>
+                    <input id="dropzone-file" type="file" class="hidden" accept="image/*" />
+                </label>
+            </div> 
+            <div id="image-preview" class="hidden w-full max-h-96 overflow-hidden rounded-lg flex justify-center bg-gray-900">
+                <img src="" alt="Preview" class="max-h-full max-w-full object-contain">
+            </div>
+            <div id="vision-input-container" class="w-full hidden">
+                <!-- For VLM text input -->
+            </div>
+            <button id="analyze-btn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 self-end hidden">
+                Analyze
+            </button>
+            <div id="vision-results" class="hidden w-full p-4 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                <!-- Results -->
+            </div>
+        </div>
+    </template>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
+</body>
+</html>

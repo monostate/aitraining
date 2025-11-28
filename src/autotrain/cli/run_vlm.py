@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 
 from autotrain import logger
-from autotrain.cli.utils import get_field_info
+from autotrain.cli.utils import get_field_info, launch_wizard_if_needed
 from autotrain.project import AutoTrainProject
 from autotrain.trainers.vlm.params import VLMTrainingParams
 
@@ -36,6 +36,12 @@ class RunAutoTrainVLMCommand(BaseAutoTrainCommand):
                 "action": "store_true",
             },
             {
+                "arg": "--interactive",
+                "help": "Launch interactive wizard for configuration",
+                "required": False,
+                "action": "store_true",
+            },
+            {
                 "arg": "--backend",
                 "help": "Backend",
                 "required": False,
@@ -43,11 +49,11 @@ class RunAutoTrainVLMCommand(BaseAutoTrainCommand):
                 "default": "local",
             },
         ] + arg_list
-        run_image_regression_parser = parser.add_parser("vlm", description="✨ Run AutoTrain VLM")
+        run_vlm_parser = parser.add_parser("vlm", description="✨ Run AutoTrain VLM")
         for arg in arg_list:
             names = [arg["arg"]] + arg.get("alias", [])
             if "action" in arg:
-                run_image_regression_parser.add_argument(
+                run_vlm_parser.add_argument(
                     *names,
                     dest=arg["arg"].replace("--", "").replace("-", "_"),
                     help=arg["help"],
@@ -56,7 +62,7 @@ class RunAutoTrainVLMCommand(BaseAutoTrainCommand):
                     default=arg.get("default"),
                 )
             else:
-                run_image_regression_parser.add_argument(
+                run_vlm_parser.add_argument(
                     *names,
                     dest=arg["arg"].replace("--", "").replace("-", "_"),
                     help=arg["help"],
@@ -65,13 +71,14 @@ class RunAutoTrainVLMCommand(BaseAutoTrainCommand):
                     default=arg.get("default"),
                     choices=arg.get("choices"),
                 )
-        run_image_regression_parser.set_defaults(func=run_vlm_command_factory)
+        run_vlm_parser.set_defaults(func=run_vlm_command_factory)
 
     def __init__(self, args):
         self.args = args
 
         store_true_arg_names = [
             "train",
+            "interactive",
             "deploy",
             "inference",
             "auto_find_batch_size",
@@ -80,6 +87,14 @@ class RunAutoTrainVLMCommand(BaseAutoTrainCommand):
         for arg_name in store_true_arg_names:
             if getattr(self.args, arg_name) is None:
                 setattr(self.args, arg_name, False)
+        # Launch wizard if needed (interactive or missing required params)
+        wizard_config = launch_wizard_if_needed(self.args, "vlm")
+        if wizard_config:
+            # Update args with wizard config
+            for key, value in wizard_config.items():
+                setattr(self.args, key, value)
+            # Ensure train is set
+            self.args.train = True
 
         if self.args.train:
             if self.args.project_name is None:
@@ -91,7 +106,7 @@ class RunAutoTrainVLMCommand(BaseAutoTrainCommand):
             if self.args.push_to_hub:
                 if self.args.username is None:
                     raise ValueError("Username must be specified for push to hub")
-        else:
+        elif not self.args.deploy and not self.args.inference:
             raise ValueError("Must specify --train, --deploy or --inference")
 
         if self.args.backend.startswith("spaces") or self.args.backend.startswith("ep-"):
@@ -103,7 +118,7 @@ class RunAutoTrainVLMCommand(BaseAutoTrainCommand):
                 raise ValueError("Token must be specified for spaces backend")
 
     def run(self):
-        logger.info("Running Image Regression")
+        logger.info("Running VLM Training")
         if self.args.train:
             params = VLMTrainingParams(**vars(self.args))
             project = AutoTrainProject(params=params, backend=self.args.backend, process=True)

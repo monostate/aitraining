@@ -26,6 +26,7 @@ class ExtractiveQuestionAnsweringParams(AutoTrainParams):
         seed (int): Random seed for reproducibility. Default is 42.
         train_split (str): Name of the training data split. Default is "train".
         valid_split (Optional[str]): Name of the validation data split. Default is None.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
         text_column (str): Column name for context/text. Default is "context".
         question_column (str): Column name for questions. Default is "question".
         answer_column (str): Column name for answers. Default is "answers".
@@ -38,7 +39,7 @@ class ExtractiveQuestionAnsweringParams(AutoTrainParams):
         push_to_hub (bool): Whether to push the model to Hugging Face Hub. Default is False.
         eval_strategy (str): Evaluation strategy during training. Default is "epoch".
         username (Optional[str]): Hugging Face username for authentication. Default is None.
-        log (str): Logging method for experiment tracking. Default is "none".
+        log (str): Logging method for experiment tracking. Default is "wandb".
         early_stopping_patience (int): Number of epochs with no improvement for early stopping. Default is 5.
         early_stopping_threshold (float): Threshold for early stopping improvement. Default is 0.01.
     """
@@ -59,6 +60,7 @@ class ExtractiveQuestionAnsweringParams(AutoTrainParams):
     seed: int = Field(42, title="Random seed for reproducibility")
     train_split: str = Field("train", title="Name of the training data split")
     valid_split: Optional[str] = Field(None, title="Name of the validation data split")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
     text_column: str = Field("context", title="Column name for context/text")
     question_column: str = Field("question", title="Column name for questions")
     answer_column: str = Field("answers", title="Column name for answers")
@@ -71,6 +73,6 @@ class ExtractiveQuestionAnsweringParams(AutoTrainParams):
     push_to_hub: bool = Field(False, title="Whether to push the model to Hugging Face Hub")
     eval_strategy: str = Field("epoch", title="Evaluation strategy during training")
     username: Optional[str] = Field(None, title="Hugging Face username for authentication")
-    log: str = Field("none", title="Logging method for experiment tracking")
+    log: str = Field("wandb", title="Logging method for experiment tracking")
     early_stopping_patience: int = Field(5, title="Number of epochs with no improvement for early stopping")
     early_stopping_threshold: float = Field(0.01, title="Threshold for early stopping improvement")

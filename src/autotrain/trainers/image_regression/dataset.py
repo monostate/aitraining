@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from PIL import Image
 
 
 class ImageRegressionDataset:
@@ -32,6 +33,10 @@ class ImageRegressionDataset:
     def __getitem__(self, item):
         image = self.data[item][self.config.image_column]
         target = self.data[item][self.config.target_column]
+
+        # Handle both PIL Images and string paths
+        if isinstance(image, str):
+            image = Image.open(image)
 
         image = self.transforms(image=np.array(image.convert("RGB")))["image"]
         image = np.transpose(image, (2, 0, 1)).astype(np.float32)

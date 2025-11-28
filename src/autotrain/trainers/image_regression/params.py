@@ -25,6 +25,7 @@ class ImageRegressionParams(AutoTrainParams):
         seed (int): Random seed. Default is 42.
         train_split (str): Train split name. Default is "train".
         valid_split (Optional[str]): Validation split name.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
         logging_steps (int): Logging steps. Default is -1.
         project_name (str): Output directory name. Default is "project-name".
         auto_find_batch_size (bool): Whether to auto find batch size. Default is False.
@@ -35,7 +36,7 @@ class ImageRegressionParams(AutoTrainParams):
         eval_strategy (str): Evaluation strategy. Default is "epoch".
         image_column (str): Image column name. Default is "image".
         target_column (str): Target column name. Default is "target".
-        log (str): Logging using experiment tracking. Default is "none".
+        log (str): Logging using experiment tracking. Default is "wandb".
         early_stopping_patience (int): Early stopping patience. Default is 5.
         early_stopping_threshold (float): Early stopping threshold. Default is 0.01.
     """
@@ -55,6 +56,7 @@ class ImageRegressionParams(AutoTrainParams):
     seed: int = Field(42, title="Seed")
     train_split: str = Field("train", title="Train split")
     valid_split: Optional[str] = Field(None, title="Validation split")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
     logging_steps: int = Field(-1, title="Logging steps")
     project_name: str = Field("project-name", title="Output directory")
     auto_find_batch_size: bool = Field(False, title="Auto find batch size")
@@ -65,6 +67,6 @@ class ImageRegressionParams(AutoTrainParams):
     eval_strategy: str = Field("epoch", title="Evaluation strategy")
     image_column: str = Field("image", title="Image column")
     target_column: str = Field("target", title="Target column")
-    log: str = Field("none", title="Logging using experiment tracking")
+    log: str = Field("wandb", title="Logging using experiment tracking")
     early_stopping_patience: int = Field(5, title="Early stopping patience")
     early_stopping_threshold: float = Field(0.01, title="Early stopping threshold")

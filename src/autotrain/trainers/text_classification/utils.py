@@ -4,6 +4,8 @@ import numpy as np
 import requests
 from sklearn import metrics
 
+from autotrain.trainers.common_metrics import get_compute_metrics_func
+
 
 BINARY_CLASSIFICATION_EVAL_METRICS = (
     "eval_loss",
@@ -154,6 +156,45 @@ def create_model_card(config, trainer, num_classes):
         base_model=base_model,
     )
     return model_card
+
+
+def get_text_classification_metrics(num_classes, custom_metrics=None):
+    """
+    Get a compute_metrics function that combines standard and custom metrics.
+
+    Args:
+        num_classes (int): Number of classes (2 for binary, >2 for multi-class)
+        custom_metrics (list): Optional list of custom metric names to add
+
+    Returns:
+        Callable: A compute_metrics function for use with Trainer
+    """
+    # Determine which standard metrics function to use
+    if num_classes == 2:
+        standard_metrics_fn = _binary_classification_metrics
+    else:
+        standard_metrics_fn = _multi_class_classification_metrics
+
+    # If no custom metrics, just return the standard function
+    if not custom_metrics:
+        return standard_metrics_fn
+
+    # Create a combined function
+    def combined_metrics(pred):
+        # Get standard metrics
+        results = standard_metrics_fn(pred)
+
+        # Add custom metrics if specified
+        if custom_metrics:
+            custom_fn = get_compute_metrics_func(custom_metrics)
+            if custom_fn:
+                custom_results = custom_fn(pred)
+                # Merge results, custom metrics override if there's a conflict
+                results.update(custom_results)
+
+        return results
+
+    return combined_metrics
 
 
 def pause_endpoint(params):

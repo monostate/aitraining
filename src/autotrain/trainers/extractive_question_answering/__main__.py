@@ -91,6 +91,32 @@ def train(config):
                     trust_remote_code=ALLOW_REMOTE_CODE,
                 )
 
+    # Apply max_samples to training data if specified (for testing/debugging)
+    if hasattr(config, "max_samples") and config.max_samples is not None and config.max_samples > 0:
+        original_size = len(train_data)
+
+        # For extractive QA, ensure diverse question-answer patterns by taking evenly spaced samples
+        step = max(1, original_size // config.max_samples)
+        indices = list(range(0, original_size, step))[: config.max_samples]
+        train_data = train_data.select(indices)
+        logger.info(
+            f"Limited training data from {original_size} to {len(train_data)} samples (max_samples={config.max_samples}, evenly spaced for Q&A diversity)"
+        )
+
+    # Apply max_samples to validation data if specified (proportionally)
+    if (
+        config.valid_split is not None
+        and hasattr(config, "max_samples")
+        and config.max_samples is not None
+        and config.max_samples > 0
+    ):
+        # Use 20% of max_samples for validation or less if validation set is smaller
+        valid_max_samples = max(1, int(config.max_samples * 0.2))
+        if len(valid_data) > valid_max_samples:
+            original_size = len(valid_data)
+            valid_data = valid_data.select(range(min(valid_max_samples, len(valid_data))))
+            logger.info(f"Limited validation data from {original_size} to {len(valid_data)} samples")
+
     logger.info(train_data)
     if config.valid_split is not None:
         logger.info(valid_data)
@@ -119,13 +145,28 @@ def train(config):
 
     use_v2 = False
     if config.valid_split is not None:
-        id_column = list(range(len(valid_data)))
+        # Add id column if it doesn't exist
+        if "id" not in valid_data.column_names:
+            id_column = list(range(len(valid_data)))
+            valid_data = valid_data.add_column("id", id_column)
+
         for data in valid_data:
-            if -1 in data[config.answer_column]["answer_start"]:
+            answer = data[config.answer_column]
+            # Handle both dict format and string format
+            if isinstance(answer, dict) and -1 in answer.get("answer_start", []):
                 use_v2 = True
                 break
+            elif isinstance(answer, str):
+                # Try to parse as JSON if it's a string
+                import json
 
-        valid_data = valid_data.add_column("id", id_column)
+                try:
+                    answer_dict = json.loads(answer)
+                    if -1 in answer_dict.get("answer_start", []):
+                        use_v2 = True
+                        break
+                except (json.JSONDecodeError, AttributeError):
+                    pass
         column_names = valid_data.column_names
         partial_process = partial(
             utils.prepare_qa_validation_features,

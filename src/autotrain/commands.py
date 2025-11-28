@@ -1,7 +1,6 @@
 import os
 import shlex
-
-import torch
+import sys
 
 from autotrain import logger
 from autotrain.trainers.clm.params import LLMTrainingParams
@@ -20,14 +19,16 @@ from autotrain.trainers.vlm.params import VLMTrainingParams
 
 
 CPU_COMMAND = [
-    "accelerate",
-    "launch",
+    sys.executable,
+    "-m",
+    "accelerate.commands.launch",
     "--cpu",
 ]
 
 SINGLE_GPU_COMMAND = [
-    "accelerate",
-    "launch",
+    sys.executable,
+    "-m",
+    "accelerate.commands.launch",
     "--num_machines",
     "1",
     "--num_processes",
@@ -56,10 +57,10 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
     """
     if num_gpus == 0:
         logger.warning("No GPU found. Forcing training on CPU. This will be super slow!")
-        return CPU_COMMAND
+        return list(CPU_COMMAND)  # Return a copy to avoid mutation
 
     if num_gpus == 1:
-        return SINGLE_GPU_COMMAND
+        return list(SINGLE_GPU_COMMAND)  # Return a copy to avoid mutation
 
     if distributed_backend in ("ddp", None):
         return [
@@ -123,16 +124,54 @@ def launch_command(params):
     """
 
     params.project_name = shlex.split(params.project_name)[0]
-    cuda_available = torch.cuda.is_available()
-    mps_available = torch.backends.mps.is_available()
-    if cuda_available:
-        num_gpus = torch.cuda.device_count()
-    elif mps_available:
-        num_gpus = 1
+    # Allow forcing GPU count to avoid importing torch (which can initialize CUDA in parent process)
+    forced_num_gpus = os.environ.get("AUTOTRAIN_FORCE_NUM_GPUS")
+    if forced_num_gpus is not None:
+        try:
+            num_gpus = int(forced_num_gpus)
+        except Exception:
+            num_gpus = 1
+        cuda_available = num_gpus > 0
+        mps_available = False
     else:
-        num_gpus = 0
+        # Import torch lazily to avoid CUDA initialization in the parent when not needed
+        import torch  # type: ignore
+
+        cuda_available = torch.cuda.is_available()
+        mps_available = torch.backends.mps.is_available()
+        if cuda_available:
+            num_gpus = torch.cuda.device_count()
+        elif mps_available:
+            # MPS has compatibility issues with quantized models and PEFT
+            # Check if we should disable MPS and fall back to CPU
+            should_disable_mps = False
+
+            # Check for quantization which is known to cause issues with MPS
+            if isinstance(params, (LLMTrainingParams, VLMTrainingParams, Seq2SeqParams)):
+                if params.quantization and params.quantization != "none":
+                    logger.warning(
+                        f"Quantization ({params.quantization}) is not fully compatible with MPS. "
+                        "Falling back to CPU training. Set AUTOTRAIN_ENABLE_MPS=1 to force MPS anyway."
+                    )
+                    should_disable_mps = True
+
+            # Allow users to force MPS or CPU via environment variable
+            force_mps = os.environ.get("AUTOTRAIN_ENABLE_MPS", "0") == "1"
+            force_cpu = os.environ.get("AUTOTRAIN_DISABLE_MPS", "0") == "1"
+
+            if force_cpu or (should_disable_mps and not force_mps):
+                # Disable MPS by setting environment variables for subprocess
+                os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+                os.environ["AUTOTRAIN_DISABLE_MPS"] = "1"
+                num_gpus = 0
+                mps_available = False
+            else:
+                num_gpus = 1
+        else:
+            num_gpus = 0
     if isinstance(params, LLMTrainingParams):
-        cmd = get_accelerate_command(num_gpus, params.gradient_accumulation, params.distributed_backend)
+        # Create a fresh copy of the command list to avoid accumulation
+        cmd = list(get_accelerate_command(num_gpus, params.gradient_accumulation, params.distributed_backend))
         if num_gpus > 0:
             cmd.append("--mixed_precision")
             if params.mixed_precision == "fp16":

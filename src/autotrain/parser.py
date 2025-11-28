@@ -181,7 +181,7 @@ class AutoTrainConfigParser:
                 params["trainer"] = self.config["task"].split("-")[1]
                 if params["trainer"] == "generic":
                     params["trainer"] = "default"
-                if params["trainer"] not in ["sft", "orpo", "dpo", "reward", "default"]:
+                if params["trainer"] not in ["sft", "orpo", "dpo", "reward", "default", "distillation"]:
                     raise ValueError("Invalid LLM training task")
 
         if self.task == "sentence_transformers":

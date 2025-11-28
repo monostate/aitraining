@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 
 from autotrain import logger
-from autotrain.cli.utils import get_field_info
+from autotrain.cli.utils import get_field_info, launch_wizard_if_needed
 from autotrain.project import AutoTrainProject
 from autotrain.trainers.tabular.params import TabularParams
 
@@ -32,6 +32,12 @@ class RunAutoTrainTabularCommand(BaseAutoTrainCommand):
             {
                 "arg": "--inference",
                 "help": "Command to run inference (limited availability)",
+                "required": False,
+                "action": "store_true",
+            },
+            {
+                "arg": "--interactive",
+                "help": "Launch interactive wizard for configuration",
                 "required": False,
                 "action": "store_true",
             },
@@ -74,6 +80,7 @@ class RunAutoTrainTabularCommand(BaseAutoTrainCommand):
 
         store_true_arg_names = [
             "train",
+            "interactive",
             "deploy",
             "inference",
             "push_to_hub",
@@ -81,6 +88,14 @@ class RunAutoTrainTabularCommand(BaseAutoTrainCommand):
         for arg_name in store_true_arg_names:
             if getattr(self.args, arg_name) is None:
                 setattr(self.args, arg_name, False)
+        # Launch wizard if needed (interactive or missing required params)
+        wizard_config = launch_wizard_if_needed(self.args, "tabular")
+        if wizard_config:
+            # Update args with wizard config
+            for key, value in wizard_config.items():
+                setattr(self.args, key, value)
+            # Ensure train is set
+            self.args.train = True
 
         if self.args.train:
             if self.args.project_name is None:
@@ -92,7 +107,7 @@ class RunAutoTrainTabularCommand(BaseAutoTrainCommand):
             if self.args.push_to_hub:
                 if self.args.username is None:
                     raise ValueError("Username must be specified for push to hub")
-        else:
+        elif not self.args.deploy and not self.args.inference:
             raise ValueError("Must specify --train, --deploy or --inference")
 
         self.args.target_columns = [k.strip() for k in self.args.target_columns.split(",")]

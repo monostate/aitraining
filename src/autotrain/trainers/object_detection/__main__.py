@@ -84,10 +84,62 @@ def train(config):
                     trust_remote_code=ALLOW_REMOTE_CODE,
                 )
 
+    # Apply max_samples to training data if specified (for testing/debugging)
+    if hasattr(config, "max_samples") and config.max_samples is not None and config.max_samples > 0:
+        original_size = len(train_data)
+
+        # For object detection, ensure diverse object patterns by taking evenly spaced samples
+        step = max(1, original_size // config.max_samples)
+        indices = list(range(0, original_size, step))[: config.max_samples]
+        train_data = train_data.select(indices)
+        logger.info(
+            f"Limited training data from {original_size} to {len(train_data)} samples (max_samples={config.max_samples}, evenly spaced for object diversity)"
+        )
+
+    # Apply max_samples to validation data if specified (proportionally)
+    if (
+        config.valid_split is not None
+        and hasattr(config, "max_samples")
+        and config.max_samples is not None
+        and config.max_samples > 0
+    ):
+        # Use 20% of max_samples for validation or less if validation set is smaller
+        valid_max_samples = max(1, int(config.max_samples * 0.2))
+        if len(valid_data) > valid_max_samples:
+            original_size = len(valid_data)
+            valid_data = valid_data.select(range(min(valid_max_samples, len(valid_data))))
+            logger.info(f"Limited validation data from {original_size} to {len(valid_data)} samples")
+
+    # Parse JSON strings in objects column if they are strings
+    import json
+
+    def parse_objects_if_string(example):
+        if isinstance(example[config.objects_column], str):
+            example[config.objects_column] = json.loads(example[config.objects_column])
+        return example
+
+    # Apply parsing to both train and validation data
+    train_data = train_data.map(parse_objects_if_string)
+    if valid_data is not None:
+        valid_data = valid_data.map(parse_objects_if_string)
+
     logger.info(f"Train data: {train_data}")
     logger.info(f"Valid data: {valid_data}")
 
-    categories = train_data.features[config.objects_column].feature["category"].names
+    # Get categories from feature metadata if available, otherwise extract from data
+    try:
+        categories = train_data.features[config.objects_column].feature["category"].names
+    except (AttributeError, KeyError, TypeError):
+        # Fallback: extract unique categories from the data
+        all_categories = set()
+        for item in train_data[config.objects_column]:
+            if isinstance(item, dict) and "category" in item:
+                if isinstance(item["category"], list):
+                    all_categories.update(item["category"])
+                else:
+                    all_categories.add(item["category"])
+        categories = sorted(all_categories)
+
     id2label = dict(enumerate(categories))
     label2id = {v: k for k, v in id2label.items()}
 
@@ -180,9 +232,14 @@ def train(config):
 
     callbacks_to_use.extend([UploadLogs(config=config), LossLoggingCallback(), TrainStartCallback()])
 
-    _compute_metrics_fn = partial(
-        utils.object_detection_metrics, image_processor=image_processor, id2label=id2label, threshold=0.0
-    )
+    # Only set compute_metrics if we have validation data
+    # This avoids the pycocotools dependency when not doing evaluation
+    if config.valid_split is not None:
+        _compute_metrics_fn = partial(
+            utils.object_detection_metrics, image_processor=image_processor, id2label=id2label, threshold=0.0
+        )
+    else:
+        _compute_metrics_fn = None
 
     args = TrainingArguments(**training_args)
     trainer_args = dict(
@@ -191,7 +248,7 @@ def train(config):
         callbacks=callbacks_to_use,
         data_collator=utils.collate_fn,
         tokenizer=image_processor,
-        compute_metrics=_compute_metrics_fn,
+        compute_metrics=_compute_metrics_fn if _compute_metrics_fn is not None else None,
     )
 
     trainer = Trainer(

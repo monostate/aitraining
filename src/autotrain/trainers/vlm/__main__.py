@@ -31,6 +31,19 @@ def train(config):
 
 
 if __name__ == "__main__":
+    # Check if MPS should be disabled before importing torch-dependent modules
+    import os
+
+    if os.environ.get("AUTOTRAIN_DISABLE_MPS") == "1":
+        # Monkey-patch torch to disable MPS detection
+        import torch
+
+        original_is_available = torch.backends.mps.is_available
+        torch.backends.mps.is_available = lambda: False
+        # Also prevent MPS from being used accidentally
+        if hasattr(torch.backends.mps, "is_built"):
+            torch.backends.mps.is_built = lambda: False
+
     _args = parse_args()
     training_config = json.load(open(_args.training_config))
     _config = VLMTrainingParams(**training_config)

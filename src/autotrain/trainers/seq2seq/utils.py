@@ -3,6 +3,11 @@ import os
 import evaluate
 import nltk
 import numpy as np
+import torch
+from peft import PeftModel
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+from autotrain import logger
 
 
 ROUGE_METRIC = evaluate.load("rouge")
@@ -55,6 +60,44 @@ def _seq2seq_metrics(pred, tokenizer):
     result["gen_len"] = np.mean(prediction_lens)
 
     return {k: round(v, 4) for k, v in result.items()}
+
+
+def merge_adapter(base_model_path, target_model_path, adapter_path):
+    """
+    Merge PEFT adapter weights with base model and save the full model.
+
+    Args:
+        base_model_path: Path or name of the base model
+        target_model_path: Directory to save the merged model
+        adapter_path: Path to the PEFT adapter weights
+    """
+    logger.info("Loading base model for merging...")
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        base_model_path,
+        torch_dtype=torch.float16,
+        trust_remote_code=True,
+    )
+
+    tokenizer = AutoTokenizer.from_pretrained(adapter_path, trust_remote_code=True)
+
+    # Resize embeddings if needed (for added tokens during training)
+    model_vocab_size = model.get_input_embeddings().num_embeddings
+    tokenizer_vocab_size = len(tokenizer)
+
+    if model_vocab_size != tokenizer_vocab_size:
+        logger.info(f"Resizing model embeddings from {model_vocab_size} to {tokenizer_vocab_size}")
+        model.resize_token_embeddings(tokenizer_vocab_size)
+
+    # Load and merge adapter
+    logger.info("Loading PEFT adapter...")
+    model = PeftModel.from_pretrained(model, adapter_path)
+    model = model.merge_and_unload()
+
+    # Save merged model
+    logger.info("Saving merged model...")
+    model.save_pretrained(target_model_path)
+    tokenizer.save_pretrained(target_model_path)
+    logger.info("Model merging complete!")
 
 
 def create_model_card(config, trainer):

@@ -16,6 +16,7 @@ class TabularParams(AutoTrainParams):
         seed (int): Random seed for reproducibility. Default is 42.
         train_split (str): Name of the training data split. Default is "train".
         valid_split (Optional[str]): Name of the validation data split.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
         project_name (str): Name of the output directory. Default is "project-name".
         token (Optional[str]): Hub Token for authentication.
         push_to_hub (bool): Whether to push the model to the hub. Default is False.
@@ -37,6 +38,7 @@ class TabularParams(AutoTrainParams):
     seed: int = Field(42, title="Seed")
     train_split: str = Field("train", title="Train split")
     valid_split: Optional[str] = Field(None, title="Validation split")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
     project_name: str = Field("project-name", title="Output directory")
     token: Optional[str] = Field(None, title="Hub Token")
     push_to_hub: bool = Field(False, title="Push to hub")

@@ -2,7 +2,6 @@ import json
 import os
 import signal
 import sys
-import time
 from typing import List
 
 import torch
@@ -17,6 +16,7 @@ from autotrain.app.db import AutoTrainDB
 from autotrain.app.models import fetch_models
 from autotrain.app.params import AppParams, get_task_params
 from autotrain.app.utils import get_running_jobs, get_user_and_orgs, kill_process_by_pid, token_verification
+from autotrain.app.wandb_visualizer import WandbVisualizerManager
 from autotrain.dataset import (
     AutoTrainDataset,
     AutoTrainImageClassificationDataset,
@@ -36,257 +36,751 @@ ENABLE_NVCF = int(os.environ.get("ENABLE_NVCF", 0))
 AUTOTRAIN_LOCAL = int(os.environ.get("AUTOTRAIN_LOCAL", 1))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB = AutoTrainDB("autotrain.db")
+WANDB_VISUALIZER_MANAGER = WandbVisualizerManager()
 MODEL_CHOICE = fetch_models()
 
 ui_router = APIRouter()
 templates_path = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=templates_path)
 
+ASCII_BANNER = r"""
+ █████╗ ██╗████████╗██████╗  █████╗ ██╗███╗   ██╗██╗███╗   ██╗ ██████╗     
+██╔══██╗██║╚══██╔══╝██╔══██╗██╔══██╗██║████╗  ██║██║████╗  ██║██╔════╝     
+███████║██║   ██║   ██████╔╝███████║██║██╔██╗ ██║██║██╔██╗ ██║██║  ███╗    
+██╔══██║██║   ██║   ██╔══██╗██╔══██║██║██║╚██╗██║██║██║╚██╗██║██║   ██║    
+██║  ██║██║   ██║   ██║  ██║██║  ██║██║██║ ╚████║██║██║ ╚████║╚██████╔╝    
+╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═══╝ ╚═════╝     
+        From zero to hero Machine Learning Training Platform
+"""
+
 UI_PARAMS = {
+    # Training Configuration
     "mixed_precision": {
         "type": "dropdown",
         "label": "Mixed precision",
         "options": ["fp16", "bf16", "none"],
-    },
-    "optimizer": {
-        "type": "dropdown",
-        "label": "Optimizer",
-        "options": ["adamw_torch", "adamw", "adam", "sgd"],
-    },
-    "scheduler": {
-        "type": "dropdown",
-        "label": "Scheduler",
-        "options": ["linear", "cosine", "cosine_warmup", "constant"],
-    },
-    "eval_strategy": {
-        "type": "dropdown",
-        "label": "Evaluation strategy",
-        "options": ["epoch", "steps"],
-    },
-    "logging_steps": {
-        "type": "number",
-        "label": "Logging steps",
-    },
-    "save_total_limit": {
-        "type": "number",
-        "label": "Save total limit",
-    },
-    "auto_find_batch_size": {
-        "type": "dropdown",
-        "label": "Auto find batch size",
-        "options": [True, False],
-    },
-    "warmup_ratio": {
-        "type": "number",
-        "label": "Warmup proportion",
-    },
-    "max_grad_norm": {
-        "type": "number",
-        "label": "Max grad norm",
-    },
-    "weight_decay": {
-        "type": "number",
-        "label": "Weight decay",
-    },
-    "epochs": {
-        "type": "number",
-        "label": "Epochs",
-    },
-    "batch_size": {
-        "type": "number",
-        "label": "Batch size",
-    },
-    "lr": {
-        "type": "number",
-        "label": "Learning rate",
-    },
-    "seed": {
-        "type": "number",
-        "label": "Seed",
-    },
-    "gradient_accumulation": {
-        "type": "number",
-        "label": "Gradient accumulation",
-    },
-    "block_size": {
-        "type": "number",
-        "label": "Block size",
-    },
-    "model_max_length": {
-        "type": "number",
-        "label": "Model max length",
-    },
-    "add_eos_token": {
-        "type": "dropdown",
-        "label": "Add EOS token",
-        "options": [True, False],
-    },
-    "disable_gradient_checkpointing": {
-        "type": "dropdown",
-        "label": "Disable GC",
-        "options": [True, False],
-    },
-    "use_flash_attention_2": {
-        "type": "dropdown",
-        "label": "Use flash attention",
-        "options": [True, False],
-    },
-    "log": {
-        "type": "dropdown",
-        "label": "Logging",
-        "options": ["tensorboard", "none"],
-    },
-    "quantization": {
-        "type": "dropdown",
-        "label": "Quantization",
-        "options": ["int4", "int8", "none"],
-    },
-    "target_modules": {
-        "type": "string",
-        "label": "Target modules",
-    },
-    "merge_adapter": {
-        "type": "dropdown",
-        "label": "Merge adapter",
-        "options": [True, False],
-    },
-    "peft": {
-        "type": "dropdown",
-        "label": "PEFT/LoRA",
-        "options": [True, False],
-    },
-    "lora_r": {
-        "type": "number",
-        "label": "Lora r",
-    },
-    "lora_alpha": {
-        "type": "number",
-        "label": "Lora alpha",
-    },
-    "lora_dropout": {
-        "type": "number",
-        "label": "Lora dropout",
-    },
-    "model_ref": {
-        "type": "string",
-        "label": "Reference model",
-    },
-    "dpo_beta": {
-        "type": "number",
-        "label": "DPO beta",
-    },
-    "max_prompt_length": {
-        "type": "number",
-        "label": "Prompt length",
-    },
-    "max_completion_length": {
-        "type": "number",
-        "label": "Completion length",
-    },
-    "chat_template": {
-        "type": "dropdown",
-        "label": "Chat template",
-        "options": ["none", "zephyr", "chatml", "tokenizer"],
-    },
-    "padding": {
-        "type": "dropdown",
-        "label": "Padding side",
-        "options": ["right", "left", "none"],
-    },
-    "max_seq_length": {
-        "type": "number",
-        "label": "Max sequence length",
-    },
-    "early_stopping_patience": {
-        "type": "number",
-        "label": "Early stopping patience",
-    },
-    "early_stopping_threshold": {
-        "type": "number",
-        "label": "Early stopping threshold",
-    },
-    "max_target_length": {
-        "type": "number",
-        "label": "Max target length",
-    },
-    "categorical_columns": {
-        "type": "string",
-        "label": "Categorical columns",
-    },
-    "numerical_columns": {
-        "type": "string",
-        "label": "Numerical columns",
-    },
-    "num_trials": {
-        "type": "number",
-        "label": "Number of trials",
-    },
-    "time_limit": {
-        "type": "number",
-        "label": "Time limit",
-    },
-    "categorical_imputer": {
-        "type": "dropdown",
-        "label": "Categorical imputer",
-        "options": ["most_frequent", "none"],
-    },
-    "numerical_imputer": {
-        "type": "dropdown",
-        "label": "Numerical imputer",
-        "options": ["mean", "median", "none"],
-    },
-    "numeric_scaler": {
-        "type": "dropdown",
-        "label": "Numeric scaler",
-        "options": ["standard", "minmax", "maxabs", "robust", "none"],
-    },
-    "vae_model": {
-        "type": "string",
-        "label": "VAE model",
-    },
-    "prompt": {
-        "type": "string",
-        "label": "Prompt",
-    },
-    "resolution": {
-        "type": "number",
-        "label": "Resolution",
-    },
-    "num_steps": {
-        "type": "number",
-        "label": "Number of steps",
-    },
-    "checkpointing_steps": {
-        "type": "number",
-        "label": "Checkpointing steps",
-    },
-    "use_8bit_adam": {
-        "type": "dropdown",
-        "label": "Use 8-bit Adam",
-        "options": [True, False],
-    },
-    "xformers": {
-        "type": "dropdown",
-        "label": "xFormers",
-        "options": [True, False],
-    },
-    "image_square_size": {
-        "type": "number",
-        "label": "Image square size",
-    },
-    "unsloth": {
-        "type": "dropdown",
-        "label": "Unsloth",
-        "options": [True, False],
-    },
-    "max_doc_stride": {
-        "type": "number",
-        "label": "Max doc stride",
+        "group": "Training Configuration",
+        "help": "Use mixed precision training for faster computation and reduced memory usage",
     },
     "distributed_backend": {
         "type": "dropdown",
         "label": "Distributed backend",
         "options": ["ddp", "deepspeed"],
+        "group": "Training Configuration",
+        "help": "Choose distributed training backend (DDP or DeepSpeed)",
+    },
+    "use_flash_attention_2": {
+        "type": "dropdown",
+        "label": "Use flash attention",
+        "options": [True, False],
+        "group": "Training Configuration",
+        "help": "Use Flash Attention 2 for faster attention computation",
+    },
+    "disable_gradient_checkpointing": {
+        "type": "dropdown",
+        "label": "Disable GC",
+        "options": [True, False],
+        "group": "Training Configuration",
+        "help": "Disable gradient checkpointing (uses more memory but faster)",
+    },
+    "log": {
+        "type": "dropdown",
+        "label": "Logging",
+        "options": ["none", "tensorboard", "wandb"],
+        "group": "Training Configuration",
+        "help": "Enable TensorBoard logging for training metrics",
+    },
+    "wandb_visualizer": {
+        "type": "dropdown",
+        "label": "W&B Visualizer (LEET)",
+        "options": [True, False],
+        "group": "Training Configuration",
+        "help": "Stream the W&B LEET terminal dashboard locally (requires log='wandb')",
+    },
+    "logging_steps": {
+        "type": "number",
+        "label": "Logging steps",
+        "group": "Training Configuration",
+        "help": "Log training metrics every N steps",
+    },
+    "eval_strategy": {
+        "type": "dropdown",
+        "label": "Evaluation strategy",
+        "options": ["epoch", "steps"],
+        "group": "Training Configuration",
+        "help": "When to run evaluation (per epoch or per N steps)",
+    },
+    "save_total_limit": {
+        "type": "number",
+        "label": "Save total limit",
+        "group": "Training Configuration",
+        "help": "Maximum number of checkpoints to keep",
+    },
+    "auto_find_batch_size": {
+        "type": "dropdown",
+        "label": "Auto find batch size",
+        "options": [True, False],
+        "group": "Training Configuration",
+        "help": "Automatically find the largest batch size that fits in memory",
+    },
+    "packing": {
+        "type": "dropdown",
+        "label": "Enable Packing (SFT)",
+        "options": [True, False, "auto"],
+        "group": "Training Configuration",
+        "help": "Pack multiple sequences into one batch for efficiency (SFT only)",
+    },
+    # Training Hyperparameters
+    "epochs": {
+        "type": "number",
+        "label": "Epochs",
+        "group": "Training Hyperparameters",
+        "help": "Number of training epochs",
+    },
+    "batch_size": {
+        "type": "number",
+        "label": "Batch size",
+        "group": "Training Hyperparameters",
+        "help": "Training batch size per device",
+    },
+    "lr": {
+        "type": "number",
+        "label": "Learning rate",
+        "group": "Training Hyperparameters",
+        "help": "Learning rate for optimizer",
+    },
+    "optimizer": {
+        "type": "dropdown",
+        "label": "Optimizer",
+        "options": ["adamw_torch", "adamw", "adam", "sgd"],
+        "group": "Training Hyperparameters",
+        "help": "Optimizer algorithm to use",
+    },
+    "scheduler": {
+        "type": "dropdown",
+        "label": "Scheduler",
+        "options": ["linear", "cosine", "cosine_warmup", "constant"],
+        "group": "Training Hyperparameters",
+        "help": "Learning rate scheduler",
+    },
+    "warmup_ratio": {
+        "type": "number",
+        "label": "Warmup proportion",
+        "group": "Training Hyperparameters",
+        "help": "Proportion of training steps for warmup",
+    },
+    "gradient_accumulation": {
+        "type": "number",
+        "label": "Gradient accumulation",
+        "group": "Training Hyperparameters",
+        "help": "Accumulate gradients over N steps before updating",
+    },
+    "weight_decay": {
+        "type": "number",
+        "label": "Weight decay",
+        "group": "Training Hyperparameters",
+        "help": "L2 regularization coefficient",
+    },
+    "max_grad_norm": {
+        "type": "number",
+        "label": "Max grad norm",
+        "group": "Training Hyperparameters",
+        "help": "Maximum gradient norm for clipping",
+    },
+    "seed": {
+        "type": "number",
+        "label": "Seed",
+        "group": "Training Hyperparameters",
+        "help": "Random seed for reproducibility",
+    },
+    # Data Processing
+    "block_size": {
+        "type": "number",
+        "label": "Block size",
+        "group": "Data Processing",
+        "help": "Maximum sequence length for training",
+    },
+    "model_max_length": {
+        "type": "number",
+        "label": "Model max length",
+        "group": "Data Processing",
+        "help": "Maximum sequence length for the model",
+    },
+    "add_eos_token": {
+        "type": "dropdown",
+        "label": "Add EOS token",
+        "options": [True, False],
+        "group": "Data Processing",
+        "help": "Add end-of-sequence token to inputs",
+    },
+    "padding": {
+        "type": "dropdown",
+        "label": "Padding side",
+        "options": ["right", "left", "none"],
+        "group": "Data Processing",
+        "help": "Side to pad sequences on",
+    },
+    "chat_template": {
+        "type": "dropdown",
+        "label": "Chat template",
+        "options": ["none", "zephyr", "chatml", "tokenizer", "alpaca", "llama", "vicuna", "mistral"],
+        "group": "Data Processing",
+        "help": "Chat template format for conversation data",
+    },
+    "chat_format": {
+        "type": "dropdown",
+        "label": "Chat Format",
+        "options": ["none", "chatml", "alpaca", "llama", "vicuna", "zephyr", "mistral"],
+        "group": "Data Processing",
+        "help": "Message rendering format for chat data",
+    },
+    "token_weights": {
+        "type": "string",
+        "label": "Token Weights (JSON)",
+        "group": "Data Processing",
+        "help": "JSON dict of token weights for weighted loss",
+    },
+    # PEFT/LoRA
+    "quantization": {
+        "type": "dropdown",
+        "label": "Quantization",
+        "options": ["int4", "int8", "none"],
+        "group": "PEFT/LoRA",
+        "help": "Quantize model weights for reduced memory",
+    },
+    "peft": {
+        "type": "dropdown",
+        "label": "PEFT/LoRA",
+        "options": [True, False],
+        "group": "PEFT/LoRA",
+        "help": "Enable Parameter-Efficient Fine-Tuning with LoRA",
+    },
+    "lora_r": {
+        "type": "number",
+        "label": "Lora r",
+        "group": "PEFT/LoRA",
+        "help": "LoRA rank (lower = fewer parameters)",
+    },
+    "lora_alpha": {
+        "type": "number",
+        "label": "Lora alpha",
+        "group": "PEFT/LoRA",
+        "help": "LoRA scaling factor",
+    },
+    "lora_dropout": {
+        "type": "number",
+        "label": "Lora dropout",
+        "group": "PEFT/LoRA",
+        "help": "Dropout rate for LoRA layers",
+    },
+    "target_modules": {
+        "type": "string",
+        "label": "Target modules",
+        "group": "PEFT/LoRA",
+        "help": "Comma-separated list of modules to apply LoRA to (e.g., 'all-linear')",
+    },
+    "merge_adapter": {
+        "type": "dropdown",
+        "label": "Merge adapter",
+        "options": [True, False],
+        "group": "PEFT/LoRA",
+        "help": "Merge LoRA weights into base model after training",
+    },
+    # DPO/ORPO
+    "model_ref": {
+        "type": "string",
+        "label": "Reference model",
+        "group": "DPO/ORPO",
+        "help": "Reference model for DPO/ORPO (uses same model if not specified)",
+    },
+    "dpo_beta": {
+        "type": "number",
+        "label": "DPO beta",
+        "group": "DPO/ORPO",
+        "help": "KL penalty coefficient for DPO",
+    },
+    "max_prompt_length": {
+        "type": "number",
+        "label": "Prompt length",
+        "group": "DPO/ORPO",
+        "help": "Maximum prompt length for preference data",
+    },
+    "max_completion_length": {
+        "type": "number",
+        "label": "Completion length",
+        "group": "DPO/ORPO",
+        "help": "Maximum completion length",
+    },
+    # Hub Integration
+    "unsloth": {
+        "type": "dropdown",
+        "label": "Unsloth",
+        "options": [True, False],
+        "group": "Hub Integration",
+        "help": "Use Unsloth for faster training (limited model support)",
+    },
+    "wandb_token": {
+        "type": "string",
+        "label": "W&B API Token",
+        "group": "Hub Integration",
+        "help": "Optional token for syncing offline W&B runs to the cloud",
+    },
+    # Knowledge Distillation
+    "use_distillation": {
+        "type": "dropdown",
+        "label": "Enable Distillation",
+        "options": [True, False],
+        "group": "Knowledge Distillation",
+        "help": "Enable knowledge distillation from a teacher model",
+    },
+    "teacher_model": {
+        "type": "string",
+        "label": "Teacher Model",
+        "group": "Knowledge Distillation",
+        "help": "Hugging Face model ID for teacher model",
+    },
+    "teacher_prompt_template": {
+        "type": "string",
+        "label": "Teacher Prompt Template",
+        "group": "Knowledge Distillation",
+        "help": "Template for teacher model prompts",
+    },
+    "student_prompt_template": {
+        "type": "string",
+        "label": "Student Prompt Template",
+        "group": "Knowledge Distillation",
+        "help": "Template for student model prompts",
+    },
+    "distill_temperature": {
+        "type": "number",
+        "label": "Distillation Temperature",
+        "group": "Knowledge Distillation",
+        "help": "Temperature for softening probability distributions",
+    },
+    "distill_alpha": {
+        "type": "number",
+        "label": "Distillation Alpha (KL weight)",
+        "group": "Knowledge Distillation",
+        "help": "Weight for KL divergence loss (1-alpha for hard label loss)",
+    },
+    "distill_max_teacher_length": {
+        "type": "number",
+        "label": "Max Teacher Output Length",
+        "group": "Knowledge Distillation",
+        "help": "Maximum generation length for teacher model",
+    },
+    # Hyperparameter Sweep
+    "use_sweep": {
+        "type": "dropdown",
+        "label": "Enable Hyperparameter Sweep",
+        "options": [True, False],
+        "group": "Hyperparameter Sweep",
+        "help": "Enable automated hyperparameter optimization",
+    },
+    "sweep_backend": {
+        "type": "dropdown",
+        "label": "Sweep Backend",
+        "options": ["optuna", "ray", "grid", "random"],
+        "group": "Hyperparameter Sweep",
+        "help": "Backend for hyperparameter search",
+    },
+    "sweep_n_trials": {
+        "type": "number",
+        "label": "Number of Sweep Trials",
+        "group": "Hyperparameter Sweep",
+        "help": "Number of trials to run for hyperparameter search",
+    },
+    "sweep_metric": {
+        "type": "string",
+        "label": "Metric to Optimize",
+        "group": "Hyperparameter Sweep",
+        "help": "Metric to optimize (e.g., 'eval/loss', 'eval/accuracy')",
+    },
+    "sweep_direction": {
+        "type": "dropdown",
+        "label": "Optimization Direction",
+        "options": ["minimize", "maximize"],
+        "group": "Hyperparameter Sweep",
+        "help": "Whether to minimize or maximize the metric",
+    },
+    "sweep_params": {
+        "type": "string",
+        "label": "Sweep Parameters (JSON)",
+        "group": "Hyperparameter Sweep",
+        "help": 'JSON dict of parameters to sweep (e.g., {"lr": [1e-5, 1e-4]})',
+    },
+    # Enhanced Evaluation
+    "use_enhanced_eval": {
+        "type": "dropdown",
+        "label": "Enable Enhanced Evaluation",
+        "options": [True, False],
+        "group": "Enhanced Evaluation",
+        "help": "Enable enhanced evaluation with custom metrics",
+    },
+    "eval_metrics": {
+        "type": "string",
+        "label": "Evaluation Metrics (comma-separated)",
+        "group": "Enhanced Evaluation",
+        "help": "Comma-separated list of metrics (e.g., 'accuracy,f1,bleu')",
+    },
+    "eval_dataset_path": {
+        "type": "string",
+        "label": "Evaluation Dataset Path",
+        "group": "Enhanced Evaluation",
+        "help": "Path to custom evaluation dataset",
+    },
+    "eval_batch_size": {
+        "type": "number",
+        "label": "Evaluation Batch Size",
+        "group": "Enhanced Evaluation",
+        "help": "Batch size for evaluation",
+    },
+    "eval_save_predictions": {
+        "type": "dropdown",
+        "label": "Save Evaluation Predictions",
+        "options": [True, False],
+        "group": "Enhanced Evaluation",
+        "help": "Save model predictions during evaluation",
+    },
+    "eval_benchmark": {
+        "type": "dropdown",
+        "label": "Standard Benchmark",
+        "options": ["none", "mmlu", "hellaswag", "arc", "truthfulqa"],
+        "group": "Enhanced Evaluation",
+        "help": "Run standard benchmark evaluation",
+    },
+    # Reinforcement Learning (PPO)
+    "rl_reward_model_path": {
+        "type": "string",
+        "label": "Reward Model Path (for PPO)",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "REQUIRED for PPO: Path or HF model ID for reward model",
+        "required_for_ppo": True,
+        "is_ppo_requirement": True,  # This is the field that must be filled first
+    },
+    "rl_gamma": {
+        "type": "number",
+        "label": "RL Discount Factor (gamma)",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Discount factor for future rewards",
+        "required_for_ppo": True,
+    },
+    "rl_gae_lambda": {
+        "type": "number",
+        "label": "GAE Lambda",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Lambda parameter for Generalized Advantage Estimation",
+        "required_for_ppo": True,
+    },
+    "rl_kl_coef": {
+        "type": "number",
+        "label": "KL Divergence Coefficient",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Coefficient for KL divergence penalty",
+        "required_for_ppo": True,
+    },
+    "rl_value_loss_coef": {
+        "type": "number",
+        "label": "Value Loss Coefficient",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Weight for value function loss",
+        "required_for_ppo": True,
+    },
+    "rl_clip_range": {
+        "type": "number",
+        "label": "PPO Clipping Range",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Clipping range for PPO policy updates",
+        "required_for_ppo": True,
+    },
+    "rl_reward_fn": {
+        "type": "dropdown",
+        "label": "Reward Function",
+        "options": ["default", "length_penalty", "correctness", "custom"],
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Reward function type to use",
+        "required_for_ppo": True,
+    },
+    "rl_multi_objective": {
+        "type": "dropdown",
+        "label": "Multi-Objective Rewards",
+        "options": [True, False],
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Use multiple reward objectives",
+        "required_for_ppo": True,
+    },
+    "rl_reward_weights": {
+        "type": "string",
+        "label": "Reward Weights (JSON)",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "JSON dict of reward weights for multi-objective learning",
+        "required_for_ppo": True,
+    },
+    "rl_env_type": {
+        "type": "dropdown",
+        "label": "RL Environment Type",
+        "options": ["text_generation", "multi_objective", "preference_comparison"],
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Type of RL environment",
+        "required_for_ppo": True,
+    },
+    "rl_env_config": {
+        "type": "string",
+        "label": "RL Environment Config (JSON)",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "JSON configuration for RL environment",
+        "required_for_ppo": True,
+    },
+    "rl_num_ppo_epochs": {
+        "type": "number",
+        "label": "Number of PPO Epochs",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Number of epochs per PPO update",
+        "required_for_ppo": True,
+    },
+    "rl_chunk_size": {
+        "type": "number",
+        "label": "PPO Chunk Size",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Size of chunks for PPO updates",
+        "required_for_ppo": True,
+    },
+    "rl_mini_batch_size": {
+        "type": "number",
+        "label": "PPO Mini Batch Size",
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Mini-batch size for PPO updates",
+        "required_for_ppo": True,
+    },
+    "rl_optimize_device_cache": {
+        "type": "dropdown",
+        "label": "Optimize PPO Device Cache",
+        "options": [True, False],
+        "group": "Reinforcement Learning (PPO)",
+        "help": "Optimize device memory caching for PPO",
+        "required_for_ppo": True,
+    },
+    # Advanced Features
+    "custom_loss": {
+        "type": "dropdown",
+        "label": "Custom Loss Function",
+        "options": ["none", "kl", "composite", "ppo", "variance_reduced"],
+        "group": "Advanced Features",
+        "help": "Use custom loss function",
+    },
+    "custom_loss_weights": {
+        "type": "string",
+        "label": "Custom Loss Weights (JSON)",
+        "group": "Advanced Features",
+        "help": "JSON dict of loss component weights",
+    },
+    "use_forward_backward": {
+        "type": "dropdown",
+        "label": "[Advanced] Manual Forward-Backward Control",
+        "options": [False, True],
+        "group": "Advanced Features",
+        "help": "Enable manual control of forward-backward passes",
+    },
+    "forward_backward_loss_fn": {
+        "type": "dropdown",
+        "label": "[Advanced] Loss Function",
+        "options": ["none", "cross_entropy", "importance_sampling", "ppo", "custom"],
+        "group": "Advanced Features",
+        "help": "Loss function for forward-backward control",
+    },
+    "forward_backward_custom_fn": {
+        "type": "textarea",
+        "label": "[Advanced] Custom Loss Function Code",
+        "help": "Python function: def custom_loss(model, inputs, outputs, **kwargs) -> torch.Tensor",
+        "group": "Advanced Features",
+    },
+    "gradient_accumulation_steps": {
+        "type": "number",
+        "label": "[Advanced] Gradient Accumulation Steps",
+        "group": "Advanced Features",
+        "help": "Alternative gradient accumulation parameter",
+    },
+    "manual_optimizer_control": {
+        "type": "dropdown",
+        "label": "[Advanced] Manual Optimizer Control",
+        "options": [False, True],
+        "group": "Advanced Features",
+        "help": "Enable manual optimizer control",
+    },
+    "optimizer_step_frequency": {
+        "type": "number",
+        "label": "[Advanced] Optimizer Step Frequency",
+        "group": "Advanced Features",
+        "help": "Frequency of optimizer steps",
+    },
+    "grad_clip_value": {
+        "type": "number",
+        "label": "[Advanced] Gradient Clipping Value",
+        "group": "Advanced Features",
+        "help": "Alternative gradient clipping parameter",
+    },
+    "manual_sampling": {
+        "type": "dropdown",
+        "label": "[Advanced] Manual Sampling Control",
+        "options": [False, True],
+        "group": "Advanced Features",
+        "help": "Enable manual sampling control during training",
+    },
+    "sample_every_n_steps": {
+        "type": "number",
+        "label": "[Advanced] Sample Every N Steps",
+        "group": "Advanced Features",
+        "help": "Generate samples every N training steps",
+    },
+    "sample_prompts": {
+        "type": "textarea",
+        "label": "[Advanced] Sample Prompts (JSON)",
+        "help": "JSON array of prompts to sample during training",
+        "group": "Advanced Features",
+    },
+    "sample_temperature": {
+        "type": "number",
+        "label": "[Advanced] Sample Temperature",
+        "group": "Advanced Features",
+        "help": "Temperature for sampling",
+    },
+    "sample_top_k": {
+        "type": "number",
+        "label": "[Advanced] Sample Top-K",
+        "group": "Advanced Features",
+        "help": "Top-K for sampling",
+    },
+    "sample_top_p": {
+        "type": "number",
+        "label": "[Advanced] Sample Top-P",
+        "group": "Advanced Features",
+        "help": "Top-P (nucleus) for sampling",
+    },
+    "manual_checkpoint_control": {
+        "type": "dropdown",
+        "label": "[Advanced] Manual Checkpoint Control",
+        "options": [False, True],
+        "group": "Advanced Features",
+        "help": "Enable manual checkpoint control",
+    },
+    "save_state_every_n_steps": {
+        "type": "number",
+        "label": "[Advanced] Save State Every N Steps",
+        "group": "Advanced Features",
+        "help": "Save training state every N steps",
+    },
+    "load_state_from": {
+        "type": "string",
+        "label": "[Advanced] Load State From Path",
+        "group": "Advanced Features",
+        "help": "Path to load training state from",
+    },
+    # Tabular-specific parameters
+    "max_seq_length": {
+        "type": "number",
+        "label": "Max sequence length",
+        "help": "Maximum sequence length for text data",
+    },
+    "early_stopping_patience": {
+        "type": "number",
+        "label": "Early stopping patience",
+        "help": "Number of epochs without improvement before stopping",
+    },
+    "early_stopping_threshold": {
+        "type": "number",
+        "label": "Early stopping threshold",
+        "help": "Minimum change to qualify as improvement",
+    },
+    "max_target_length": {
+        "type": "number",
+        "label": "Max target length",
+        "help": "Maximum target sequence length",
+    },
+    "categorical_columns": {
+        "type": "string",
+        "label": "Categorical columns",
+        "help": "Comma-separated list of categorical column names",
+    },
+    "numerical_columns": {
+        "type": "string",
+        "label": "Numerical columns",
+        "help": "Comma-separated list of numerical column names",
+    },
+    "num_trials": {
+        "type": "number",
+        "label": "Number of trials",
+        "help": "Number of AutoML trials",
+    },
+    "time_limit": {
+        "type": "number",
+        "label": "Time limit",
+        "help": "Time limit in seconds for AutoML",
+    },
+    "categorical_imputer": {
+        "type": "dropdown",
+        "label": "Categorical imputer",
+        "options": ["most_frequent", "none"],
+        "help": "Strategy for imputing missing categorical values",
+    },
+    "numerical_imputer": {
+        "type": "dropdown",
+        "label": "Numerical imputer",
+        "options": ["mean", "median", "none"],
+        "help": "Strategy for imputing missing numerical values",
+    },
+    "numeric_scaler": {
+        "type": "dropdown",
+        "label": "Numeric scaler",
+        "options": ["standard", "minmax", "maxabs", "robust", "none"],
+        "help": "Strategy for scaling numerical features",
+    },
+    # Image-specific parameters
+    "vae_model": {
+        "type": "string",
+        "label": "VAE model",
+        "help": "VAE model for image generation",
+    },
+    "prompt": {
+        "type": "string",
+        "label": "Prompt",
+        "help": "Text prompt for image generation",
+    },
+    "resolution": {
+        "type": "number",
+        "label": "Resolution",
+        "help": "Image resolution",
+    },
+    "num_steps": {
+        "type": "number",
+        "label": "Number of steps",
+        "help": "Number of diffusion steps",
+    },
+    "checkpointing_steps": {
+        "type": "number",
+        "label": "Checkpointing steps",
+        "help": "Save checkpoint every N steps",
+    },
+    "use_8bit_adam": {
+        "type": "dropdown",
+        "label": "Use 8-bit Adam",
+        "options": [True, False],
+        "help": "Use 8-bit Adam optimizer for reduced memory",
+    },
+    "xformers": {
+        "type": "dropdown",
+        "label": "xFormers",
+        "options": [True, False],
+        "help": "Use xFormers for efficient attention",
+    },
+    "image_square_size": {
+        "type": "number",
+        "label": "Image square size",
+        "help": "Square size for image resizing",
+    },
+    "max_doc_stride": {
+        "type": "number",
+        "label": "Max doc stride",
+        "help": "Maximum stride for document processing",
     },
 }
 
@@ -333,12 +827,19 @@ def user_authentication(request: Request):
 
     If the application is running in a space and authentication fails, it returns a login template response.
     """
+    # If running locally and no token provided, allow access (return None or dummy token)
+    # This is for the 'autotrain chat' use case where we want to run locally without HF_TOKEN
+    if not IS_RUNNING_IN_SPACE and os.environ.get("HF_TOKEN") is None:
+        return "local_mode"
+
     # priority: hf_token env var > oauth_info in session > token in bearer header
-    # if "oauth_info" in request.session:
-    if HF_TOKEN is not None:
+    token_from_env = os.environ.get("HF_TOKEN")
+    if token_from_env is not None:
+        if os.environ.get("AUTOTRAIN_SKIP_TOKEN_VERIFICATION", "0") == "1":
+            return token_from_env
         try:
-            _ = token_verification(token=os.environ.get("HF_TOKEN"))
-            return HF_TOKEN
+            _ = token_verification(token=token_from_env)
+            return token_from_env
         except Exception as e:
             logger.error(f"Failed to verify token: {e}")
             if IS_RUNNING_IN_SPACE:
@@ -361,37 +862,43 @@ def user_authentication(request: Request):
     if IS_RUNNING_IN_SPACE:
         return templates.TemplateResponse("login.html", {"request": request})
 
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired token",
-    )
+    # Local mode fallback if environment variable not set but function called
+    return "local_mode"
 
 
 @ui_router.get("/", response_class=HTMLResponse)
-async def load_index(request: Request, token: str = Depends(user_authentication)):
+async def load_index(request: Request):
     """
-    This function is used to load the index page
+    Redirects root to inference page as training UI is deprecated/removed.
+    """
+    return RedirectResponse("/inference")
+
+
+@ui_router.get("/inference", response_class=HTMLResponse)
+async def load_inference(request: Request, token: str = Depends(user_authentication)):
+    """
+    This function is used to load the inference page
     :return: HTMLResponse
     """
-    if os.environ.get("SPACE_ID") == "autotrain-projects/autotrain-advanced":
-        return templates.TemplateResponse("duplicate.html", {"request": request})
-    try:
-        _users = get_user_and_orgs(user_token=token)
-    except Exception as e:
-        logger.error(f"Failed to get user and orgs: {e}")
-        if "oauth_info" in request.session:
-            request.session.pop("oauth_info", None)
-        return templates.TemplateResponse("login.html", {"request": request})
+    # Handle local mode - no need to fetch user/orgs
+    if token == "local_mode":
+        _users = ["local"]
+    else:
+        try:
+            _users = get_user_and_orgs(user_token=token)
+        except Exception as e:
+            logger.error(f"Failed to get user and orgs: {e}")
+            if "oauth_info" in request.session:
+                request.session.pop("oauth_info", None)
+            return templates.TemplateResponse("login.html", {"request": request})
     context = {
         "request": request,
         "valid_users": _users,
-        "enable_ngc": ENABLE_NGC,
-        "enable_nvcf": ENABLE_NVCF,
-        "enable_local": AUTOTRAIN_LOCAL,
         "version": __version__,
-        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "token": token,
+        "banner": ASCII_BANNER,
     }
-    return templates.TemplateResponse("index.html", context)
+    return templates.TemplateResponse("inference.html", context)
 
 
 @ui_router.get("/logout", response_class=HTMLResponse)
@@ -689,6 +1196,7 @@ async def handle_form(
     params = app_params.munge()
     project = AutoTrainProject(params=params, backend=hardware)
     job_id = project.create()
+
     monitor_url = ""
     if hardware == "local-ui":
         DB.add_job(job_id)
@@ -700,7 +1208,32 @@ async def handle_form(
     else:
         monitor_url = f"Success! Monitor your job in logs. Job ID: {job_id}"
 
-    return {"success": "true", "monitor_url": monitor_url}
+    wandb_command = None
+    wandb_visualizer_active = False
+    wandb_visualizer_error = None
+
+    is_local_wandb = hardware == "local-ui" and getattr(params, "log", "none") == "wandb"
+    if is_local_wandb:
+        run_dir = params.project_name
+        wandb_command = f'WANDB_DIR="{run_dir}" wandb beta leet "{run_dir}"'
+        if getattr(params, "wandb_visualizer", False):
+            wandb_visualizer_active = WANDB_VISUALIZER_MANAGER.start(run_dir, getattr(params, "wandb_token", None))
+            if not wandb_visualizer_active:
+                wandb_visualizer_error = WANDB_VISUALIZER_MANAGER.status().get("error")
+        else:
+            WANDB_VISUALIZER_MANAGER.stop()
+    else:
+        WANDB_VISUALIZER_MANAGER.stop()
+
+    response = {
+        "success": "true",
+        "monitor_url": monitor_url,
+        "wandb_command": wandb_command,
+        "wandb_visualizer_active": wandb_visualizer_active,
+    }
+    if wandb_visualizer_error:
+        response["wandb_visualizer_error"] = wandb_visualizer_error
+    return response
 
 
 @ui_router.get("/help/{element_id}", response_class=JSONResponse)
@@ -786,6 +1319,7 @@ async def stop_training(authenticated: bool = Depends(user_authentication)):
     :return: JSONResponse
     """
     running_jobs = get_running_jobs(DB)
+    WANDB_VISUALIZER_MANAGER.stop()
     if running_jobs:
         for _pid in running_jobs:
             try:
@@ -794,3 +1328,11 @@ async def stop_training(authenticated: bool = Depends(user_authentication)):
                 logger.info(f"Process {_pid} is already completed. Skipping...")
         return {"success": True}
     return {"success": False}
+
+
+@ui_router.get("/wandb_visualizer/status", response_class=JSONResponse)
+async def wandb_visualizer_status(authenticated: bool = Depends(user_authentication)):
+    """Return current W&B LEET viewer status for the web UI."""
+    if AUTOTRAIN_LOCAL == 0:
+        return {"active": False, "message": "W&B visualizer is only available in local mode."}
+    return WANDB_VISUALIZER_MANAGER.status()

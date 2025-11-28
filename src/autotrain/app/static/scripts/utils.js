@@ -126,6 +126,26 @@ document.addEventListener('DOMContentLoaded', function () {
                         '<p>' + monitorURL + '</p>';
                 }
 
+                if (responseObj.wandb_command) {
+                    var wandbBlock = document.createElement('div');
+                    wandbBlock.className = 'mt-4 text-left text-sm text-gray-700 dark:text-gray-300';
+                    var hint = document.createElement('p');
+                    hint.textContent = 'Reopen the W&B LEET dashboard anytime with:';
+                    var code = document.createElement('code');
+                    code.className = 'block mt-2 bg-gray-100 dark:bg-gray-900 p-2 rounded text-xs text-gray-800 dark:text-gray-100 whitespace-pre-wrap';
+                    code.textContent = responseObj.wandb_command;
+                    wandbBlock.appendChild(hint);
+                    wandbBlock.appendChild(code);
+                    finalModalContent.appendChild(wandbBlock);
+                }
+
+                if (window.WandbPanel && typeof window.WandbPanel.updateCommand === 'function') {
+                    window.WandbPanel.updateCommand(
+                        responseObj.wandb_command,
+                        responseObj.wandb_visualizer_error
+                    );
+                }
+
                 showFinalModal();
             } else {
                 finalModalContent.innerHTML = '<p>Error: ' + xhr.status + ' ' + xhr.statusText + '</p>' + '<p> Please check the logs for more information.</p>';

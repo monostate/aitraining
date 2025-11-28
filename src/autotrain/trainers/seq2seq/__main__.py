@@ -1,5 +1,7 @@
 import argparse
+import gc
 import json
+import os
 from functools import partial
 
 import torch
@@ -94,6 +96,32 @@ def train(config):
                     trust_remote_code=ALLOW_REMOTE_CODE,
                 )
 
+    # Apply max_samples to training data if specified (for testing/debugging)
+    if hasattr(config, "max_samples") and config.max_samples is not None and config.max_samples > 0:
+        original_size = len(train_data)
+
+        # For seq2seq, get diverse input/output patterns by taking evenly spaced samples
+        step = max(1, original_size // config.max_samples)
+        indices = list(range(0, original_size, step))[: config.max_samples]
+        train_data = train_data.select(indices)
+        logger.info(
+            f"Limited training data from {original_size} to {len(train_data)} samples (max_samples={config.max_samples}, evenly spaced for pattern diversity)"
+        )
+
+    # Apply max_samples to validation data if specified (proportionally)
+    if (
+        config.valid_split is not None
+        and hasattr(config, "max_samples")
+        and config.max_samples is not None
+        and config.max_samples > 0
+    ):
+        # Use 20% of max_samples for validation or less if validation set is smaller
+        valid_max_samples = max(1, int(config.max_samples * 0.2))
+        if len(valid_data) > valid_max_samples:
+            original_size = len(valid_data)
+            valid_data = valid_data.select(range(min(valid_max_samples, len(valid_data))))
+            logger.info(f"Limited validation data from {original_size} to {len(valid_data)} samples")
+
     tokenizer = AutoTokenizer.from_pretrained(config.model, token=config.token, trust_remote_code=ALLOW_REMOTE_CODE)
 
     train_data = Seq2SeqDataset(data=train_data, tokenizer=tokenizer, config=config)
@@ -166,6 +194,17 @@ def train(config):
     )
 
     if config.peft:
+        # Check for MPS + quantization incompatibility
+        mps_available = torch.backends.mps.is_available()
+        if mps_available and config.quantization and config.quantization != "none":
+            force_mps = os.environ.get("AUTOTRAIN_ENABLE_MPS", "0") == "1"
+            if not force_mps:
+                logger.warning(
+                    f"Quantization ({config.quantization}) with PEFT is not fully compatible with MPS. "
+                    "Disabling quantization for MPS. Use CUDA for quantization support."
+                )
+                config.quantization = None
+
         if config.quantization == "int4":
             raise NotImplementedError("int4 quantization is not supported")
         # if config.use_int4:
@@ -247,7 +286,38 @@ def train(config):
     trainer.model.config.use_cache = True
     trainer.save_model(config.project_name)
 
+    # Save tokenizer before merging (if using PEFT)
+    if config.peft:
+        logger.info("Saving tokenizer...")
+        tokenizer.save_pretrained(config.project_name)
+
+    # Generate model card before potentially deleting trainer
     model_card = utils.create_model_card(config, trainer)
+
+    # Handle PEFT merging if needed
+    if config.peft and config.merge_adapter:
+        del trainer
+        gc.collect()
+        torch.cuda.empty_cache()
+        logger.info("Merging adapter weights...")
+        try:
+            utils.merge_adapter(
+                base_model_path=config.model,
+                target_model_path=config.project_name,
+                adapter_path=config.project_name,
+            )
+            logger.info("Adapter weights merged!")
+            # Remove adapter files after successful merge (consistent with CLM and VLM trainers)
+            for file in os.listdir(config.project_name):
+                if file.startswith("adapter_"):
+                    os.remove(os.path.join(config.project_name, file))
+            logger.info("Adapter files cleaned up after merge")
+        except Exception as e:
+            logger.warning(f"Failed to merge adapter weights: {e}")
+            logger.warning("Training completed but model will contain adapter weights only.")
+
+    # Ensure output directory exists before writing README
+    os.makedirs(config.project_name, exist_ok=True)
 
     # save model card to output directory as README.md
     with open(f"{config.project_name}/README.md", "w", encoding="utf-8") as f:

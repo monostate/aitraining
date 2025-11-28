@@ -41,6 +41,46 @@ task_info = """
 <p>For example, if you are training a text classification model, you can choose "Text Classification" task.</p>
 """
 
+reward_model_info = """
+<h3>Reward Model Training (llm:reward)</h3>
+
+<p>⚠️ <strong>CRITICAL: This produces a scoring model, NOT a text generation model!</strong></p>
+
+<p><strong>What it does:</strong><br>
+- Trains a model to score text quality (returns a single number)<br>
+- Used in Step 1 of RLHF (Reinforcement Learning from Human Feedback)</p>
+
+<p><strong>Model type:</strong> AutoModelForSequenceClassification (scorer, not generator)</p>
+
+<p><strong>Use case:</strong> Provide rewards for PPO training (Step 2 of RLHF)</p>
+
+<p><strong>Required data format:</strong> Preference pairs with 'chosen' and 'rejected' text columns</p>
+
+<p><strong>After training:</strong> Use this model with PPO trainer via:<br>
+<code>autotrain llm --trainer ppo --rl-reward-model-path [path]</code></p>
+"""
+
+distillation_trainer_info = """
+<h3>Distillation Trainer (Prompt Distillation)</h3>
+
+<p><strong>Purpose:</strong> Internalize complex prompts into the model weights</p>
+
+<p><strong>How it works:</strong></p>
+<ol>
+  <li>Teacher model generates outputs using complex prompts</li>
+  <li>Student model learns to produce same outputs without prompts</li>
+  <li>Reduces inference cost by eliminating prompt tokens</li>
+</ol>
+
+<p><strong>Different from --use-distillation:</strong></p>
+<ul>
+  <li><code>--use-distillation</code> = Teacher-student knowledge transfer (KL divergence)</li>
+  <li><code>--trainer distillation</code> = Prompt internalization</li>
+</ul>
+
+<p><strong>When to use:</strong> When you have a working prompt that's too long/expensive for production</p>
+"""
+
 
 APP_IMAGE_CLASSIFICATION_DATA_HELP = """The data for the Image Classification task should be in the following format:
 - The data should be in a zip file.
@@ -77,5 +117,9 @@ def get_app_help(element_id):
         return hardware_info
     elif element_id == "task_info":
         return task_info
+    elif element_id == "reward_model_info":
+        return reward_model_info
+    elif element_id == "distillation_trainer_info":
+        return distillation_trainer_info
     else:
         return "No help available for this element."

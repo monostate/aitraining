@@ -36,9 +36,10 @@ class TokenClassificationParams(AutoTrainParams):
         push_to_hub (bool): Whether to push the model to the Hugging Face hub. Default is False.
         eval_strategy (str): Evaluation strategy. Default is "epoch".
         username (Optional[str]): Hugging Face username. Default is None.
-        log (str): Logging method for experiment tracking. Default is "none".
+        log (str): Logging method for experiment tracking. Default is "wandb".
         early_stopping_patience (int): Patience for early stopping. Default is 5.
         early_stopping_threshold (float): Threshold for early stopping. Default is 0.01.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
     """
 
     data_path: str = Field(None, title="Data path")
@@ -56,6 +57,7 @@ class TokenClassificationParams(AutoTrainParams):
     seed: int = Field(42, title="Seed")
     train_split: str = Field("train", title="Train split")
     valid_split: Optional[str] = Field(None, title="Validation split")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
     tokens_column: str = Field("tokens", title="Tokens column")
     tags_column: str = Field("tags", title="Tags column")
     logging_steps: int = Field(-1, title="Logging steps")
@@ -67,6 +69,6 @@ class TokenClassificationParams(AutoTrainParams):
     push_to_hub: bool = Field(False, title="Push to hub")
     eval_strategy: str = Field("epoch", title="Evaluation strategy")
     username: Optional[str] = Field(None, title="Hugging Face Username")
-    log: str = Field("none", title="Logging using experiment tracking")
+    log: str = Field("wandb", title="Logging using experiment tracking")
     early_stopping_patience: int = Field(5, title="Early stopping patience")
     early_stopping_threshold: float = Field(0.01, title="Early stopping threshold")

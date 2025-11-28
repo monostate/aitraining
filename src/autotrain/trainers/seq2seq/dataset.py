@@ -26,6 +26,29 @@ class Seq2SeqDataset:
         self.max_len_input = self.config.max_seq_length
         self.max_len_target = self.config.max_target_length
 
+        # Validate required columns exist
+        if len(self.data) > 0:
+            # Check if data has column_names attribute (datasets library)
+            if hasattr(self.data, "column_names"):
+                columns = self.data.column_names
+            elif hasattr(self.data, "columns"):
+                columns = self.data.columns
+            else:
+                # For list-like data, check the first item
+                columns = list(self.data[0].keys()) if isinstance(self.data[0], dict) else []
+
+            # Validate text column exists
+            if columns and self.config.text_column not in columns:
+                raise KeyError(
+                    f"Required column '{self.config.text_column}' not found in dataset. Available columns: {columns}"
+                )
+
+            # Validate target column exists
+            if columns and self.config.target_column not in columns:
+                raise KeyError(
+                    f"Required column '{self.config.target_column}' not found in dataset. Available columns: {columns}"
+                )
+
     def __len__(self):
         return len(self.data)
 

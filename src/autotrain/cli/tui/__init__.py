@@ -1,0 +1,1 @@
+"""AITraining TUI package."""

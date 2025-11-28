@@ -25,6 +25,7 @@ class ImageClassificationParams(AutoTrainParams):
         seed (int): Random seed for reproducibility. Default is 42.
         train_split (str): Name of the training data split. Default is "train".
         valid_split (Optional[str]): Name of the validation data split.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
         logging_steps (int): Number of steps between logging. Default is -1.
         project_name (str): Name of the project for output directory. Default is "project-name".
         auto_find_batch_size (bool): Automatically find optimal batch size. Default is False.
@@ -35,7 +36,7 @@ class ImageClassificationParams(AutoTrainParams):
         eval_strategy (str): Evaluation strategy during training. Default is "epoch".
         image_column (str): Column name for images in the dataset. Default is "image".
         target_column (str): Column name for target labels in the dataset. Default is "target".
-        log (str): Logging method for experiment tracking. Default is "none".
+        log (str): Logging method for experiment tracking. Default is "wandb".
         early_stopping_patience (int): Number of epochs with no improvement for early stopping. Default is 5.
         early_stopping_threshold (float): Threshold for early stopping. Default is 0.01.
     """
@@ -55,6 +56,7 @@ class ImageClassificationParams(AutoTrainParams):
     seed: int = Field(42, title="Random seed for reproducibility")
     train_split: str = Field("train", title="Name of the training data split")
     valid_split: Optional[str] = Field(None, title="Name of the validation data split")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
     logging_steps: int = Field(-1, title="Number of steps between logging")
     project_name: str = Field("project-name", title="Name of the project for output directory")
     auto_find_batch_size: bool = Field(False, title="Automatically find optimal batch size")
@@ -65,6 +67,6 @@ class ImageClassificationParams(AutoTrainParams):
     eval_strategy: str = Field("epoch", title="Evaluation strategy during training")
     image_column: str = Field("image", title="Column name for images in the dataset")
     target_column: str = Field("target", title="Column name for target labels in the dataset")
-    log: str = Field("none", title="Logging method for experiment tracking")
+    log: str = Field("wandb", title="Logging method for experiment tracking")
     early_stopping_patience: int = Field(5, title="Number of epochs with no improvement for early stopping")
     early_stopping_threshold: float = Field(0.01, title="Threshold for early stopping")

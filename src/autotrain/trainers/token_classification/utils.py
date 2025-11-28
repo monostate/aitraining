@@ -3,6 +3,8 @@ import os
 import numpy as np
 from seqeval import metrics
 
+from autotrain.trainers.common_metrics import get_compute_metrics_func
+
 
 MODEL_CARD = """
 ---
@@ -59,6 +61,44 @@ def token_classification_metrics(pred, label_list):
         "accuracy": metrics.accuracy_score(true_labels, true_predictions),
     }
     return results
+
+
+def get_token_classification_metrics(label_list, custom_metrics=None):
+    """
+    Get a compute_metrics function that combines standard and custom metrics.
+
+    Args:
+        label_list (list): List of label names for token classification
+        custom_metrics (list): Optional list of custom metric names to add
+
+    Returns:
+        Callable: A compute_metrics function for use with Trainer
+    """
+
+    # Standard token classification function
+    def standard_metrics_fn(pred):
+        return token_classification_metrics(pred, label_list)
+
+    # If no custom metrics, just return the standard function
+    if not custom_metrics:
+        return standard_metrics_fn
+
+    # Create a combined function
+    def combined_metrics(pred):
+        # Get standard metrics
+        results = standard_metrics_fn(pred)
+
+        # Add custom metrics if specified
+        if custom_metrics:
+            custom_fn = get_compute_metrics_func(custom_metrics)
+            if custom_fn:
+                custom_results = custom_fn(pred)
+                # Merge results, custom metrics override if there's a conflict
+                results.update(custom_results)
+
+        return results
+
+    return combined_metrics
 
 
 def create_model_card(config, trainer):

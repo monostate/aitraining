@@ -204,6 +204,45 @@ def train(config):
             )
     train_data = train_data.to_pandas()
 
+    # Apply max_samples to training data if specified (for testing/debugging)
+    if hasattr(config, "max_samples") and config.max_samples is not None and config.max_samples > 0:
+        original_size = len(train_data)
+
+        if config.task == "classification":
+            # For classification, ensure balanced sampling across classes
+            # We'll use the first target column for sampling
+            target_col = config.target_columns[0]
+            unique_labels = train_data[target_col].unique()
+            num_classes = len(unique_labels)
+            samples_per_class = config.max_samples // num_classes
+
+            # Collect balanced samples from each class
+            balanced_indices = []
+            for label in unique_labels:
+                # Get indices for this class
+                class_indices = train_data[train_data[target_col] == label].index.tolist()
+                # Take up to samples_per_class from this class
+                selected = class_indices[:samples_per_class]
+                balanced_indices.extend(selected)
+
+            # Sort indices to maintain order and select
+            balanced_indices.sort()
+            train_data = train_data.iloc[balanced_indices]
+            logger.info(
+                f"Limited training data from {original_size} to {len(train_data)} samples (max_samples={config.max_samples}, balanced across {num_classes} classes)"
+            )
+        else:
+            # For regression, get representative distribution across value range
+            # Sort by target value and take evenly spaced samples
+            target_col = config.target_columns[0]
+            sorted_data = train_data.sort_values(by=target_col)
+            step = len(sorted_data) / config.max_samples
+            selected_indices = [int(i * step) for i in range(config.max_samples)]
+            train_data = sorted_data.iloc[selected_indices].reset_index(drop=True)
+            logger.info(
+                f"Limited training data from {original_size} to {len(train_data)} samples (max_samples={config.max_samples}, stratified across value range)"
+            )
+
     if config.valid_split is not None:
         if config.data_path == f"{config.project_name}/autotrain-data":
             logger.info("loading dataset from disk")
@@ -226,6 +265,15 @@ def train(config):
                     trust_remote_code=ALLOW_REMOTE_CODE,
                 )
         valid_data = valid_data.to_pandas()
+
+        # Apply max_samples to validation data if specified (proportionally)
+        if hasattr(config, "max_samples") and config.max_samples is not None and config.max_samples > 0:
+            # Use 20% of max_samples for validation or less if validation set is smaller
+            valid_max_samples = max(1, int(config.max_samples * 0.2))
+            if len(valid_data) > valid_max_samples:
+                original_size = len(valid_data)
+                valid_data = valid_data.iloc[: min(valid_max_samples, len(valid_data))]
+                logger.info(f"Limited validation data from {original_size} to {len(valid_data)} samples")
 
     if valid_data is None:
         raise Exception("valid_data is None. Please provide a valid_split for tabular training.")

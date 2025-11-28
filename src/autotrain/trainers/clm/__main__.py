@@ -14,6 +14,13 @@ def parse_args():
 
 @monitor
 def train(config):
+    """
+    Main training dispatcher for CLM trainers.
+
+    Note: Distillation is now controlled by the use_distillation flag in params.py
+    If use_distillation=True, the distillation logic wraps the base trainer.
+    This is handled internally by checking config.use_distillation.
+    """
     if isinstance(config, dict):
         config = LLMTrainingParams(**config)
 
@@ -42,11 +49,38 @@ def train(config):
 
         train_orpo(config)
 
+    elif config.trainer == "ppo":
+        from autotrain.trainers.clm.train_clm_ppo import train as train_ppo
+
+        train_ppo(config)
+
+    elif config.trainer == "distillation":
+        from autotrain import logger
+        from autotrain.trainers.clm import train_clm_distill
+
+        logger.info("Starting Prompt Distillation training...")
+        logger.info("Note: This is different from inline distillation (--use-distillation)")
+        logger.info("Prompt distillation internalizes complex prompts into the model.")
+        train_clm_distill.train(config)
+
     else:
         raise ValueError(f"trainer `{config.trainer}` not supported")
 
 
 if __name__ == "__main__":
+    # Check if MPS should be disabled before importing torch-dependent modules
+    import os
+
+    if os.environ.get("AUTOTRAIN_DISABLE_MPS") == "1":
+        # Monkey-patch torch to disable MPS detection
+        import torch
+
+        original_is_available = torch.backends.mps.is_available
+        torch.backends.mps.is_available = lambda: False
+        # Also prevent MPS from being used accidentally
+        if hasattr(torch.backends.mps, "is_built"):
+            torch.backends.mps.is_built = lambda: False
+
     _args = parse_args()
     training_config = json.load(open(_args.training_config))
     _config = LLMTrainingParams(**training_config)

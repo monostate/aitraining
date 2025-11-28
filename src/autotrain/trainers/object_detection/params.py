@@ -11,7 +11,7 @@ class ObjectDetectionParams(AutoTrainParams):
 
     Attributes:
         data_path (str): Path to the dataset.
-        model (str): Name of the model to be used. Default is "google/vit-base-patch16-224".
+        model (str): Name of the model to be used. Default is "facebook/detr-resnet-50".
         username (Optional[str]): Hugging Face Username.
         lr (float): Learning rate. Default is 5e-5.
         epochs (int): Number of training epochs. Default is 3.
@@ -25,6 +25,7 @@ class ObjectDetectionParams(AutoTrainParams):
         seed (int): Random seed. Default is 42.
         train_split (str): Name of the training data split. Default is "train".
         valid_split (Optional[str]): Name of the validation data split.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
         logging_steps (int): Number of steps between logging. Default is -1.
         project_name (str): Name of the project for output directory. Default is "project-name".
         auto_find_batch_size (bool): Whether to automatically find batch size. Default is False.
@@ -35,14 +36,14 @@ class ObjectDetectionParams(AutoTrainParams):
         eval_strategy (str): Evaluation strategy. Default is "epoch".
         image_column (str): Name of the image column in the dataset. Default is "image".
         objects_column (str): Name of the target column in the dataset. Default is "objects".
-        log (str): Logging method for experiment tracking. Default is "none".
+        log (str): Logging method for experiment tracking. Default is "wandb".
         image_square_size (Optional[int]): Longest size to which the image will be resized, then padded to square. Default is 600.
         early_stopping_patience (int): Number of epochs with no improvement after which training will be stopped. Default is 5.
         early_stopping_threshold (float): Minimum change to qualify as an improvement. Default is 0.01.
     """
 
     data_path: str = Field(None, title="Data path")
-    model: str = Field("google/vit-base-patch16-224", title="Model name")
+    model: str = Field("facebook/detr-resnet-50", title="Model name")
     username: Optional[str] = Field(None, title="Hugging Face Username")
     lr: float = Field(5e-5, title="Learning rate")
     epochs: int = Field(3, title="Number of training epochs")
@@ -56,6 +57,7 @@ class ObjectDetectionParams(AutoTrainParams):
     seed: int = Field(42, title="Seed")
     train_split: str = Field("train", title="Train split")
     valid_split: Optional[str] = Field(None, title="Validation split")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
     logging_steps: int = Field(-1, title="Logging steps")
     project_name: str = Field("project-name", title="Output directory")
     auto_find_batch_size: bool = Field(False, title="Auto find batch size")
@@ -66,7 +68,7 @@ class ObjectDetectionParams(AutoTrainParams):
     eval_strategy: str = Field("epoch", title="Evaluation strategy")
     image_column: str = Field("image", title="Image column")
     objects_column: str = Field("objects", title="Target column")
-    log: str = Field("none", title="Logging using experiment tracking")
+    log: str = Field("wandb", title="Logging using experiment tracking")
     image_square_size: Optional[int] = Field(
         600, title="Image longest size will be resized to this value, then image will be padded to square."
     )

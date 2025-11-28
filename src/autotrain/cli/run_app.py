@@ -132,13 +132,27 @@ class RunAutoTrainAppCommand(BaseAutoTrainCommand):
             logger.info(f"AutoTrain Public URL: {url}")
             logger.info("Please wait for the app to load...")
 
-        command = f"uvicorn autotrain.app.app:app --host {self.host} --port {self.port}"
+        # Add src to PYTHONPATH to prioritize local changes over installed package
+        env = os.environ.copy()
+        src_path = os.path.abspath("src")
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = src_path
+
+        command = f"{sys.executable} -m uvicorn autotrain.app.app:app --host {self.host} --port {self.port}"
         command += f" --workers {self.workers}"
 
         with open("autotrain.log", "w", encoding="utf-8") as log_file:
             if sys.platform == "win32":
                 process = subprocess.Popen(
-                    command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True, bufsize=1
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    shell=True,
+                    text=True,
+                    bufsize=1,
+                    env=env,
                 )
 
             else:
@@ -150,6 +164,7 @@ class RunAutoTrainAppCommand(BaseAutoTrainCommand):
                     text=True,
                     bufsize=1,
                     preexec_fn=os.setsid,
+                    env=env,
                 )
 
             output_thread = threading.Thread(target=handle_output, args=(process.stdout, log_file))

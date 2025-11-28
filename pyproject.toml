@@ -1,0 +1,193 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aitraining"
+dynamic = ["version"]
+description = "Advanced Machine Learning Training Platform"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "Apache 2.0"}
+authors = [
+    {name = "Andrew Correa", email = "andrew@monostate.ai"}
+]
+keywords = ["automl", "autonlp", "autotrain", "huggingface", "machine learning", "deep learning", "fine-tuning", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # Core ML libraries
+    "torch>=1.10.0",
+    "transformers==4.57.1",
+    "accelerate==1.11.0",
+    "peft==0.14.0",
+    "trl==0.13.0",
+    "datasets[vision]~=3.2.0",
+
+    # Training utilities
+    "tensorboard==2.18.0",
+    "scikit-learn==1.6.0",
+    "evaluate==0.4.3",
+    "sentence-transformers==3.3.1",
+
+    # Data processing
+    "albumentations==1.4.23",
+    "Pillow==11.0.0",
+    "pandas==2.2.3",
+    "numpy",
+
+    # NLP utilities
+    "sentencepiece>=0.1.99",
+    "tiktoken==0.8.0",
+    "nltk==3.9.1",
+    "sacremoses==0.1.1",
+    "seqeval==1.2.2",
+    "ipadic==1.0.0",
+
+    # Vision utilities
+    "timm==1.0.12",
+    "torchmetrics==1.6.0",
+    "faster-coco-eval==1.7.0",
+    "pycocotools==2.0.8",
+
+    # Optimization
+    "optuna==4.1.0",
+    "xgboost==2.1.3",
+
+    # HuggingFace ecosystem
+    "huggingface_hub==0.34.4",
+    "hf-transfer",
+
+    # Web framework (for API/app mode)
+    "fastapi==0.115.6",
+    "starlette",
+    "uvicorn==0.34.0",
+    "python-multipart==0.0.20",
+    "werkzeug==3.1.3",
+    "pyngrok==7.2.1",
+    "authlib==1.4.0",
+    "itsdangerous==2.2.0",
+    "httpx==0.28.1",
+
+    # Utilities
+    "loguru==0.7.3",
+    "requests==2.32.3",
+    "pydantic==2.10.4",
+    "pyyaml==6.0.2",
+    "tqdm==4.67.1",
+    "joblib==1.4.2",
+    "einops==0.8.0",
+    "packaging==24.2",
+    "cryptography==44.0.0",
+    "nvitop==1.3.2",
+    "py7zr==0.22.0",
+    "safetensors",
+    "psutil",
+    "diffusers",
+    "ipywidgets",
+    "wandb>=0.23.0",
+
+    # TUI dependencies
+    "textual==0.86.1",
+    "rich==13.9.4",
+
+    # Metrics
+    "rouge_score==0.1.2",
+    "jiwer==3.0.5",
+
+    # Platform-specific
+    "bitsandbytes==0.42.0; sys_platform == 'linux'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "isort",
+    "flake8",
+    "pytest",
+    "pytest-asyncio",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio",
+    "playwright>=1.40.0",
+    "httpx>=0.25.0",
+]
+quality = [
+    "black",
+    "isort",
+    "flake8",
+]
+docs = [
+    "recommonmark",
+    "sphinx",
+    "sphinx-markdown-tables",
+    "sphinx-rtd-theme",
+    "sphinx-copybutton",
+]
+
+[project.urls]
+Homepage = "https://github.com/monostate/aitraining"
+Repository = "https://github.com/monostate/aitraining"
+Documentation = "https://github.com/monostate/aitraining#readme"
+Issues = "https://github.com/monostate/aitraining/issues"
+
+[project.scripts]
+aitraining = "autotrain.cli.autotrain:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "autotrain.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+autotrain = [
+    "app/static/**/*",
+    "app/templates/**/*",
+    "cli/tui/styles.tcss",
+    "cli/tui/theme.tcss",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.isort]
+ensure_newline_before_comments = true
+force_grid_wrap = 0
+include_trailing_comma = true
+line_length = 119
+lines_after_imports = 2
+multi_line_output = 3
+use_parentheses = true
+
+[tool.flake8]
+ignore = ["E203", "E501", "W503"]
+max-line-length = 119
+per-file-ignores = [
+    "__init__.py:F401,E402",
+    "src/autotrain/params.py:F401"
+]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "dist",
+    "build"
+]

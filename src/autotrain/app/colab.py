@@ -28,6 +28,7 @@ def colab_app():
         "LLM Generic",
         "LLM DPO",
         "LLM Reward",
+        "LLM Distillation",
         "Text Classification",
         "Text Regression",
         "Sequence to Sequence",
@@ -50,6 +51,7 @@ def colab_app():
         "LLM Generic": "llm:generic",
         "LLM DPO": "llm:dpo",
         "LLM Reward": "llm:reward",
+        "LLM Distillation": "llm:distillation",
         "Text Classification": "text-classification",
         "Text Regression": "text-regression",
         "Sequence to Sequence": "seq2seq",
@@ -230,7 +232,7 @@ def colab_app():
 
     def update_col_mapping(*args):
         task = TASK_MAP[task_dropdown.value]
-        if task in ["llm:sft", "llm:generic"]:
+        if task in ["llm:sft", "llm:generic", "llm:distillation"]:
             col_mapping.value = '{"text": "text"}'
             dataset_source_dropdown.disabled = False
             valid_split.disabled = True

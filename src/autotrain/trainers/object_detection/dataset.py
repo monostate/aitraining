@@ -38,6 +38,16 @@ class ObjectDetectionDataset:
     def __getitem__(self, item):
         image = self.data[item][self.config.image_column]
         objects = self.data[item][self.config.objects_column]
+
+        # Handle both PIL Images and string paths
+        if isinstance(image, str):
+            from PIL import Image
+
+            image = Image.open(image)
+
+        # Store original image size before any transformations
+        orig_width, orig_height = image.size
+
         output = self.transforms(
             image=np.array(image.convert("RGB")), bboxes=objects["bbox"], category=objects["category"]
         )
@@ -57,4 +67,10 @@ class ObjectDetectionDataset:
         result = self.image_processor(images=image, annotations=annotations, return_tensors="pt")
         result["pixel_values"] = result["pixel_values"][0]
         result["labels"] = result["labels"][0]
+
+        # Add original image size to labels for metrics computation
+        # Use the original PIL image size (width, height) but store as [height, width] for consistency
+        if "orig_size" not in result["labels"]:
+            result["labels"]["orig_size"] = [orig_height, orig_width]
+
         return result

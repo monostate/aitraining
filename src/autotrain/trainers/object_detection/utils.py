@@ -182,14 +182,38 @@ def object_detection_metrics(evaluation_results, image_processor, threshold=0.0,
     # Collect targets in the required format for metric computation
     for batch in targets:
         # collect image sizes, we will need them for predictions post processing
-        batch_image_sizes = torch.tensor([x["orig_size"] for x in batch])
+        # Ensure each orig_size has 2 elements (height, width)
+        batch_image_sizes_list = []
+        for x in batch:
+            orig_size = x["orig_size"]
+            # Handle the case where orig_size might be a single value
+            if hasattr(orig_size, "__len__"):
+                if len(orig_size) == 1:
+                    # If single value, assume square image
+                    orig_size = [orig_size[0], orig_size[0]]
+                elif len(orig_size) == 2:
+                    orig_size = list(orig_size)
+            else:
+                # Single scalar value
+                orig_size = [orig_size, orig_size]
+            batch_image_sizes_list.append(orig_size)
+
+        batch_image_sizes = torch.tensor(batch_image_sizes_list)
         image_sizes.append(batch_image_sizes)
+
         # collect targets in the required format for metric computation
         # boxes were converted to YOLO format needed for model training
         # here we will convert them to Pascal VOC format (x_min, y_min, x_max, y_max)
         for image_target in batch:
             boxes = torch.tensor(image_target["boxes"])
-            boxes = convert_bbox_yolo_to_pascal(boxes, image_target["orig_size"])
+            orig_size = image_target["orig_size"]
+            # Ensure orig_size is a 2-element sequence for convert_bbox_yolo_to_pascal
+            if hasattr(orig_size, "__len__"):
+                if len(orig_size) == 1:
+                    orig_size = [orig_size[0], orig_size[0]]
+            else:
+                orig_size = [orig_size, orig_size]
+            boxes = convert_bbox_yolo_to_pascal(boxes, orig_size)
             labels = torch.tensor(image_target["class_labels"])
             post_processed_targets.append({"boxes": boxes, "labels": labels})
 
@@ -204,7 +228,14 @@ def object_detection_metrics(evaluation_results, image_processor, threshold=0.0,
         post_processed_predictions.extend(post_processed_output)
 
     # Compute metrics
-    metric = MeanAveragePrecision(box_format="xyxy", class_metrics=True)
+    # Try faster-coco-eval first (numpy 2.x compatible), fallback to pycocotools
+    try:
+        # Prefer faster-coco-eval for numpy 2.x compatibility
+        metric = MeanAveragePrecision(box_format="xyxy", class_metrics=True, backend="faster_coco_eval")
+    except (ImportError, ValueError):
+        # Fallback to pycocotools if faster-coco-eval not available
+        metric = MeanAveragePrecision(box_format="xyxy", class_metrics=True, backend="pycocotools")
+
     metric.update(post_processed_predictions, post_processed_targets)
     metrics = metric.compute()
 

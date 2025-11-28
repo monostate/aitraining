@@ -9,6 +9,7 @@ from transformers.trainer_callback import PrinterCallback
 from autotrain import logger
 from autotrain.trainers.clm import utils
 from autotrain.trainers.clm.params import LLMTrainingParams
+from autotrain.trainers.clm.sweep_utils import with_sweep
 
 
 def process_data(data, tokenizer, config):
@@ -22,11 +23,19 @@ def process_data(data, tokenizer, config):
     return data
 
 
+@with_sweep
 def train(config):
     logger.info("Starting default/generic CLM training...")
     if isinstance(config, dict):
         config = LLMTrainingParams(**config)
+
     train_data, valid_data = utils.process_input_data(config)
+
+    # Validate required columns
+    utils.validate_required_columns(train_data, [config.text_column], "Default (CLM)", "training")
+    if valid_data is not None:
+        utils.validate_required_columns(valid_data, [config.text_column], "Default (CLM)", "validation")
+
     tokenizer = utils.get_tokenizer(config)
     train_data, valid_data = utils.process_data_with_chat_template(config, tokenizer, train_data, valid_data)
 
@@ -85,7 +94,9 @@ def train(config):
         )
 
     logger.info("creating trainer")
-    callbacks = utils.get_callbacks(config)
+    callbacks = utils.get_callbacks(
+        config, train_data=train_data, valid_data=valid_data, model=model, tokenizer=tokenizer
+    )
     trainer_args = dict(
         args=args,
         model=model,
@@ -94,7 +105,7 @@ def train(config):
     trainer = Trainer(
         **trainer_args,
         train_dataset=train_data,
-        eval_dataset=valid_data if config.valid_split is not None else None,
+        eval_dataset=valid_data,
         tokenizer=tokenizer,
         data_collator=default_data_collator,
     )
@@ -112,3 +123,4 @@ def train(config):
     trainer.remove_callback(PrinterCallback)
     trainer.train()
     utils.post_training_steps(config, trainer)
+    return trainer

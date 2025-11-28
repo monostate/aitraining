@@ -16,6 +16,7 @@ class Seq2SeqParams(AutoTrainParams):
         seed (int): Random seed for reproducibility. Default is 42.
         train_split (str): Name of the training data split. Default is "train".
         valid_split (Optional[str]): Name of the validation data split.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
         project_name (str): Name of the project or output directory. Default is "project-name".
         token (Optional[str]): Hub Token for authentication.
         push_to_hub (bool): Whether to push the model to the Hugging Face Hub. Default is False.
@@ -43,7 +44,7 @@ class Seq2SeqParams(AutoTrainParams):
         lora_alpha (int): LoRA-Alpha parameter for PEFT. Default is 32.
         lora_dropout (float): LoRA-Dropout parameter for PEFT. Default is 0.05.
         target_modules (str): Target modules for PEFT. Default is "all-linear".
-        log (str): Logging method for experiment tracking. Default is "none".
+        log (str): Logging method for experiment tracking. Default is "wandb".
         early_stopping_patience (int): Patience for early stopping. Default is 5.
         early_stopping_threshold (float): Threshold for early stopping. Default is 0.01.
     """
@@ -54,6 +55,7 @@ class Seq2SeqParams(AutoTrainParams):
     seed: int = Field(42, title="Seed")
     train_split: str = Field("train", title="Train split")
     valid_split: Optional[str] = Field(None, title="Validation split")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
     project_name: str = Field("project-name", title="Output directory")
     token: Optional[str] = Field(None, title="Hub Token")
     push_to_hub: bool = Field(False, title="Push to hub")
@@ -78,11 +80,15 @@ class Seq2SeqParams(AutoTrainParams):
     token: Optional[str] = Field(None, title="Hub Token")
     push_to_hub: bool = Field(False, title="Push to hub")
     peft: bool = Field(False, title="Use PEFT")
-    quantization: Optional[str] = Field("int8", title="int4, int8, or None")
+    quantization: Optional[str] = Field(None, title="int4, int8, or None")
+    merge_adapter: bool = Field(
+        True,
+        title="Whether to merge PEFT adapters and save full model (True = easier inference, False = smaller size)",
+    )
     lora_r: int = Field(16, title="LoRA-R")
     lora_alpha: int = Field(32, title="LoRA-Alpha")
     lora_dropout: float = Field(0.05, title="LoRA-Dropout")
     target_modules: str = Field("all-linear", title="Target modules for PEFT")
-    log: str = Field("none", title="Logging using experiment tracking")
+    log: str = Field("wandb", title="Logging using experiment tracking")
     early_stopping_patience: int = Field(5, title="Early stopping patience")
     early_stopping_threshold: float = Field(0.01, title="Early stopping threshold")

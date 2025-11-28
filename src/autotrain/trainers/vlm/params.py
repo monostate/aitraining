@@ -16,17 +16,18 @@ class VLMTrainingParams(AutoTrainParams):
         data_path (str): Data path. Default is "data".
         train_split (str): Train data config. Default is "train".
         valid_split (Optional[str]): Validation data config. Default is None.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
 
         trainer (str): Trainer type (captioning, vqa, segmentation, detection). Default is "vqa".
-        log (str): Logging using experiment tracking. Default is "none".
+        log (str): Logging using experiment tracking. Default is "wandb".
         disable_gradient_checkpointing (bool): Gradient checkpointing. Default is False.
         logging_steps (int): Logging steps. Default is -1.
         eval_strategy (str): Evaluation strategy. Default is "epoch".
         save_total_limit (int): Save total limit. Default is 1.
         auto_find_batch_size (bool): Auto find batch size. Default is False.
         mixed_precision (Optional[str]): Mixed precision (fp16, bf16, or None). Default is None.
-        lr (float): Learning rate. Default is 3e-5.
-        epochs (int): Number of training epochs. Default is 1.
+        lr (float): Learning rate. Default is 5e-5.
+        epochs (int): Number of training epochs. Default is 3.
         batch_size (int): Training batch size. Default is 2.
         warmup_ratio (float): Warmup proportion. Default is 0.1.
         gradient_accumulation (int): Gradient accumulation steps. Default is 4.
@@ -60,18 +61,19 @@ class VLMTrainingParams(AutoTrainParams):
     data_path: str = Field("data", title="Data path")
     train_split: str = Field("train", title="Train data config")
     valid_split: Optional[str] = Field(None, title="Validation data config")
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")
 
     # trainer params
     trainer: str = Field("vqa", title="Trainer type")  # captioning, vqa, segmentation, detection
-    log: str = Field("none", title="Logging using experiment tracking")
+    log: str = Field("wandb", title="Logging using experiment tracking")
     disable_gradient_checkpointing: bool = Field(False, title="Gradient checkpointing")
     logging_steps: int = Field(-1, title="Logging steps")
     eval_strategy: str = Field("epoch", title="Evaluation strategy")
     save_total_limit: int = Field(1, title="Save total limit")
     auto_find_batch_size: bool = Field(False, title="Auto find batch size")
     mixed_precision: Optional[str] = Field(None, title="fp16, bf16, or None")
-    lr: float = Field(3e-5, title="Learning rate")
-    epochs: int = Field(1, title="Number of training epochs")
+    lr: float = Field(5e-5, title="Learning rate")
+    epochs: int = Field(3, title="Number of training epochs")
     batch_size: int = Field(2, title="Training batch size")
     warmup_ratio: float = Field(0.1, title="Warmup proportion")
     gradient_accumulation: int = Field(4, title="Gradient accumulation steps")
@@ -82,9 +84,12 @@ class VLMTrainingParams(AutoTrainParams):
     seed: int = Field(42, title="Seed")
 
     # peft
-    quantization: Optional[str] = Field("int4", title="int4, int8, or None")
+    quantization: Optional[str] = Field(None, title="int4, int8, or None")
     target_modules: Optional[str] = Field("all-linear", title="Target modules")
-    merge_adapter: bool = Field(False, title="Merge adapter")
+    merge_adapter: bool = Field(
+        True,
+        title="Whether to merge PEFT adapters and save full model (True = easier inference, False = smaller size)",
+    )
     peft: bool = Field(False, title="Use PEFT")
     lora_r: int = Field(16, title="Lora r")
     lora_alpha: int = Field(32, title="Lora alpha")

@@ -1,0 +1,363 @@
+/*
+ * Inference Page - Retro-Modern Enhancements
+ */
+
+/* Model items get a subtle retro card treatment */
+.model-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.model-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #F54E00 0%, #FF6B35 100%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.model-item:hover::before {
+    opacity: 1;
+}
+
+/* Chat history has a subtle paper texture feel */
+#chat-history {
+    position: relative;
+}
+
+/* Message bubbles - enhanced retro style */
+.message-bubble-user {
+    background: linear-gradient(135deg, #F54E00 0%, #FF6B35 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 78, 0, 0.2);
+}
+
+.message-bubble-assistant {
+    background: white;
+    border: 2px solid #E8E5DD;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.dark .message-bubble-assistant {
+    background: #252525;
+    border-color: #3A3A3A;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Loading spinner with retro feel */
+.fa-spinner {
+    color: #F54E00;
+}
+
+/* Results panels with warm borders */
+#classification-results,
+#vision-results {
+    border-width: 2px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.dark #classification-results,
+.dark #vision-results {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* File upload zone - playful retro */
+label[for="dropzone-file"] {
+    transition: all 0.2s ease;
+    border-width: 2px;
+}
+
+label[for="dropzone-file"]:hover {
+    border-color: #F54E00;
+    background-color: #FFF9F5;
+}
+
+.dark label[for="dropzone-file"]:hover {
+    border-color: #FF6B35;
+    background-color: #1A1A1A;
+}
+
+/* Progress bars - warm gradient */
+.progress-bar {
+    background: linear-gradient(90deg, #F54E00 0%, #FF6B35 100%);
+    border-radius: 0.25rem;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+/* Badge styling - retro pills */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #E0E7FF;
+    color: #1E3A5F;
+}
+
+.dark .badge {
+    background: #1E3A5F;
+    color: #93B0FF;
+}
+
+/* Header enhancement */
+#model-header {
+    border-bottom-width: 2px;
+}
+
+/* Right panel scrollbar enhancement */
+#right-panel::-webkit-scrollbar-thumb {
+    background: #F54E00;
+}
+
+.dark #right-panel::-webkit-scrollbar-thumb {
+    background: #FF6B35;
+}
+
+/* Sidebar enhancement with subtle texture */
+aside {
+    position: relative;
+}
+
+aside::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0,0,0,0.01) 2px,
+            rgba(0,0,0,0.01) 4px
+        );
+    pointer-events: none;
+}
+
+.dark aside::after {
+    background-image:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(255,255,255,0.01) 2px,
+            rgba(255,255,255,0.01) 4px
+        );
+}
+
+/* Enhance the ASCII banner */
+.text-orange-500 {
+    text-shadow: 0 0 10px rgba(245, 78, 0, 0.3);
+}
+
+/* Button hover enhancement */
+button.bg-blue-600:hover {
+    background: linear-gradient(135deg, #4A5FCC 0%, #5375E2 100%);
+}
+
+button.bg-blue-600:active {
+    background: #3D4FA8;
+}
+
+/* Refresh button - subtle pulse on idle */
+#refresh-models {
+    transition: all 0.2s ease;
+}
+
+#refresh-models:hover {
+    color: #F54E00;
+    transform: rotate(45deg);
+}
+
+/* Image preview enhancement */
+#image-preview {
+    border: 2px solid #E8E5DD;
+    background: #F5F3EE;
+}
+
+.dark #image-preview {
+    border-color: #3A3A3A;
+    background: #1A1A1A;
+}
+
+/* Example inputs - card style */
+#example-inputs > * {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid #E8E5DD;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+#example-inputs > *:hover {
+    border-color: #F54E00;
+    background: #FFF9F5;
+    transform: translateX(2px);
+}
+
+.dark #example-inputs > * {
+    border-color: #3A3A3A;
+}
+
+.dark #example-inputs > *:hover {
+    border-color: #FF6B35;
+    background: #252525;
+}
+
+/* Version footer - subtle  */
+aside > div:last-child {
+    opacity: 0.6;
+    font-weight: 500;
+}
+
+/* Smooth transitions everywhere */
+* {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+    outline: 2px solid #F54E00;
+    outline-offset: 2px;
+}
+
+.dark *:focus-visible {
+    outline-color: #FF6B35;
+}
+
+/* Range Slider Styling */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    cursor: pointer;
+    background: transparent; /* Keep transparent - track is styled separately */
+}
+
+input[type="range"]::-webkit-slider-track {
+    background: #E8E5DD;
+    height: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 1.25rem;
+    width: 1.25rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F54E00 0%, #FF6B35 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    margin-top: -0.375rem;
+    transition: all 0.15s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 3px 8px rgba(245, 78, 0, 0.4);
+}
+
+input[type="range"]::-moz-range-track {
+    background: #E8E5DD;
+    height: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+input[type="range"]::-moz-range-thumb {
+    height: 1.25rem;
+    width: 1.25rem;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F54E00 0%, #FF6B35 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: all 0.15s;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 3px 8px rgba(245, 78, 0, 0.4);
+}
+
+.dark input[type="range"]::-webkit-slider-track {
+    background: #3A3A3A;
+}
+
+.dark input[type="range"]::-moz-range-track {
+    background: #3A3A3A;
+}
+
+/* Toggle Switch Enhancement */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Peer styles for toggle */
+.peer:checked ~ div {
+    background-color: #F54E00;
+}
+
+.peer:focus ~ div {
+    box-shadow: 0 0 0 3px rgba(245, 78, 0, 0.2);
+}
+
+.peer-checked\:bg-orange-600:checked {
+    background-color: #F54E00;
+}
+
+.peer-checked\:after\:translate-x-full:checked::after {
+    transform: translateX(100%);
+}
+
+/* Inference settings section styling */
+#inference-settings {
+    animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Settings values display */
+#temp-value,
+#tokens-value,
+#topp-value,
+#topk-value,
+#sampling-value {
+    display: inline-block;
+    min-width: 2.5rem;
+    text-align: right;
+    font-weight: 600;
+    color: #F54E00;
+}
+
+.dark #temp-value,
+.dark #tokens-value,
+.dark #topp-value,
+.dark #topk-value,
+.dark #sampling-value {
+    color: #FF6B35;
+}

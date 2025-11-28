@@ -8,12 +8,17 @@ def _prepare_dataset(examples, tokenizer, config):
     # https://github.com/huggingface/transformers/blob/master/examples/pytorch/question-answering/run_qa.py
     # and modified for AutoTrain
     pad_on_right = tokenizer.padding_side == "right"
+
+    # Ensure stride is smaller than effective max length (accounting for special tokens)
+    # Most tokenizers add 2-3 special tokens, so stride must be < max_length - 3
+    effective_stride = min(config.max_doc_stride, max(1, config.max_seq_length - 3))
+
     tokenized_examples = tokenizer(
         examples[config.question_column if pad_on_right else config.text_column],
         examples[config.text_column if pad_on_right else config.question_column],
         truncation="only_second" if pad_on_right else "only_first",
         max_length=config.max_seq_length,
-        stride=config.max_doc_stride,
+        stride=effective_stride,
         return_overflowing_tokens=True,
         return_offsets_mapping=True,
         padding="max_length",
@@ -46,8 +51,19 @@ def _prepare_dataset(examples, tokenizer, config):
         # One example can give several spans, this is the index of the example containing this span of text.
         sample_index = sample_mapping[i]
         answers = examples[config.answer_column][sample_index]
+
+        # Handle both dict format and string format
+        if isinstance(answers, str):
+            import json
+
+            try:
+                answers = json.loads(answers)
+            except json.JSONDecodeError:
+                # If parsing fails, create empty answer
+                answers = {"answer_start": [], "text": []}
+
         # If no answers are given, set the cls_index as answer.
-        if len(answers["answer_start"]) == 0:
+        if len(answers.get("answer_start", [])) == 0 or len(answers.get("text", [])) == 0:
             tokenized_examples["start_positions"].append(cls_index)
             tokenized_examples["end_positions"].append(cls_index)
         else:

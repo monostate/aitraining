@@ -563,6 +563,13 @@ def get_task_params(task, param_type):
                 "add_eos_token",
                 "unsloth",
             ]
+        elif trainer == "ppo":
+            more_hidden_params = [
+                "dpo_beta",
+                "max_prompt_length",
+                "max_completion_length",
+                "unsloth",
+            ]
         if param_type == "basic":
             more_hidden_params.extend(
                 [

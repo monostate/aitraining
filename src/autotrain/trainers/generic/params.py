@@ -17,6 +17,7 @@ class GenericParams(AutoTrainParams):
         script_path (str): The file path to the script to be executed. Path to script.py.
         env (Optional[Dict[str, str]]): A dictionary of environment variables to be set.
         args (Optional[Dict[str, str]]): A dictionary of arguments to be passed to the script.
+        max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
     """
 
     username: str = Field(
@@ -34,3 +35,4 @@ class GenericParams(AutoTrainParams):
     args: Optional[Dict[str, str]] = Field(
         None, title="Arguments", description="A dictionary of arguments to be passed to the script."
     )
+    max_samples: Optional[int] = Field(None, title="Maximum number of samples to use")

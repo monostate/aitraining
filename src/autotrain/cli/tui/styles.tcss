@@ -1,0 +1,266 @@
+/* AITraining TUI Styles */
+
+/* Main container layout */
+#main-container {
+    layout: horizontal;
+    height: 100%;
+}
+
+/* Panel styles */
+.panel {
+    border: solid $primary;
+    padding: 1;
+    margin: 0;
+}
+
+#left-panel {
+    width: 30;
+    dock: left;
+}
+
+#center-panel {
+    width: 1fr;
+    min-width: 40;
+}
+
+#right-panel {
+    width: 40;
+    dock: right;
+}
+
+/* Branding and headers */
+#branding {
+    text-style: bold;
+    color: $success;
+    text-align: center;
+    padding: 1;
+    background: $panel;
+}
+
+#param-header {
+    text-style: bold;
+    color: $primary;
+    padding: 1;
+    text-align: center;
+}
+
+.section-label {
+    text-style: bold;
+    color: $text;
+    padding: 0 0 1 0;
+}
+
+/* Trainer selector */
+#trainer-container {
+    padding: 1;
+    height: auto;
+}
+
+#trainer-select {
+    width: 100%;
+}
+
+/* Groups list */
+#groups-container {
+    height: 1fr;
+    padding: 1;
+}
+
+#groups-listview {
+    height: 1fr;
+    background: $panel;
+}
+
+#groups-listview ListItem {
+    padding: 0 1;
+}
+
+#groups-listview ListItem.--highlight {
+    background: $primary 20%;
+}
+
+.selected-group {
+    text-style: bold;
+    color: $success;
+}
+
+/* Parameter form */
+#param-form-container {
+    padding: 1;
+}
+
+.field-container {
+    padding: 0 0 1 0;
+    height: auto;
+}
+
+.field-label {
+    text-style: bold;
+    color: $text;
+    padding: 0 0 0 0;
+    margin: 0 0 1 0;
+}
+
+.field-help {
+    color: $text-muted;
+    text-style: italic;
+    margin: 0 0 1 0;
+}
+
+.field-container Input {
+    width: 100%;
+}
+
+.field-container Select {
+    width: 100%;
+}
+
+.field-container TextArea {
+    width: 100%;
+}
+
+.field-container Checkbox {
+    width: auto;
+}
+
+/* Context panel */
+#context-container {
+    height: 100%;
+    padding: 1;
+}
+
+#context-content {
+    height: 100%;
+}
+
+/* Tabs */
+#right-tabs {
+    height: 100%;
+}
+
+#right-tabs ContentSwitcher {
+    height: 1fr;
+}
+
+/* Command preview */
+#command-preview {
+    height: 100%;
+    padding: 1;
+}
+
+/* Log viewer */
+#log-viewer {
+    height: 100%;
+    padding: 1;
+    background: $panel;
+}
+
+/* Dialogs */
+#dialog {
+    align: center middle;
+    width: 60;
+    height: 12;
+    padding: 1 2;
+    background: $panel;
+    border: thick $primary;
+}
+
+#dialog-title {
+    text-style: bold;
+    text-align: center;
+    padding: 1;
+    color: $primary;
+}
+
+#dialog-buttons {
+    align: center middle;
+    padding: 1;
+    height: 3;
+}
+
+#dialog-buttons Button {
+    margin: 0 1;
+}
+
+#filename-input {
+    width: 100%;
+    margin: 1 0;
+}
+
+/* Search dialog */
+#search-dialog {
+    align: center middle;
+    width: 70;
+    height: 20;
+    padding: 1 2;
+    background: $panel;
+    border: thick $primary;
+}
+
+#search-input {
+    width: 100%;
+    margin: 1 0;
+}
+
+#search-results {
+    height: 10;
+    margin: 1 0;
+    background: $panel;
+}
+
+/* Help screen */
+#help-screen {
+    align: center middle;
+    width: 80%;
+    height: 80%;
+    padding: 2;
+    background: $panel;
+    border: thick $primary;
+}
+
+#help-content {
+    height: 1fr;
+    width: 100%;
+}
+
+#close-help {
+    dock: bottom;
+    align: center middle;
+    margin: 1;
+}
+
+/* No params label */
+#no-params-label {
+    text-align: center;
+    color: $text-muted;
+    padding: 2;
+}
+
+/* Status indicators */
+.modified-indicator {
+    color: $warning;
+}
+
+.error-indicator {
+    color: $error;
+}
+
+.success-indicator {
+    color: $success;
+}
+
+/* Loading indicator */
+LoadingIndicator {
+    background: transparent;
+    color: $primary;
+}
+
+/* Footer */
+Footer {
+    background: $panel;
+}
+
+/* Header */
+Header {
+    background: $panel;
+}

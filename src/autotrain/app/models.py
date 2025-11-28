@@ -1,6 +1,14 @@
 import collections
+import warnings
 
 from huggingface_hub import list_models
+
+
+def _list_models_no_warn(*args, **kwargs):
+    """Call list_models with deprecation warnings suppressed."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning, module="huggingface_hub.utils._deprecation")
+        return list_models(*args, **kwargs)
 
 
 def get_sorted_models(hub_models):
@@ -33,7 +41,7 @@ def _fetch_text_classification_models():
         list: A sorted list of model identifiers from the Hugging Face model hub.
     """
     hub_models1 = list(
-        list_models(
+        _list_models_no_warn(
             task="fill-mask",
             library="transformers",
             sort="downloads",
@@ -43,7 +51,7 @@ def _fetch_text_classification_models():
         )
     )
     hub_models2 = list(
-        list_models(
+        _list_models_no_warn(
             task="text-classification",
             library="transformers",
             sort="downloads",
@@ -56,7 +64,7 @@ def _fetch_text_classification_models():
     hub_models = get_sorted_models(hub_models)
 
     trending_models = list(
-        list_models(
+        _list_models_no_warn(
             task="fill-mask",
             library="transformers",
             sort="likes7d",
@@ -75,7 +83,7 @@ def _fetch_text_classification_models():
 
 def _fetch_llm_models():
     hub_models = list(
-        list_models(
+        _list_models_no_warn(
             task="text-generation",
             library="transformers",
             sort="downloads",
@@ -86,7 +94,7 @@ def _fetch_llm_models():
     )
     hub_models = get_sorted_models(hub_models)
     trending_models = list(
-        list_models(
+        _list_models_no_warn(
             task="text-generation",
             library="transformers",
             sort="likes7d",
@@ -104,7 +112,7 @@ def _fetch_llm_models():
 
 def _fetch_image_classification_models():
     hub_models = list(
-        list_models(
+        _list_models_no_warn(
             task="image-classification",
             library="transformers",
             sort="downloads",
@@ -116,7 +124,7 @@ def _fetch_image_classification_models():
     hub_models = get_sorted_models(hub_models)
 
     trending_models = list(
-        list_models(
+        _list_models_no_warn(
             task="image-classification",
             library="transformers",
             sort="likes7d",
@@ -135,7 +143,7 @@ def _fetch_image_classification_models():
 
 def _fetch_image_object_detection_models():
     hub_models = list(
-        list_models(
+        _list_models_no_warn(
             task="object-detection",
             library="transformers",
             sort="downloads",
@@ -148,7 +156,7 @@ def _fetch_image_object_detection_models():
     hub_models = get_sorted_models(hub_models)
 
     trending_models = list(
-        list_models(
+        _list_models_no_warn(
             task="object-detection",
             library="transformers",
             sort="likes7d",
@@ -168,7 +176,7 @@ def _fetch_image_object_detection_models():
 
 def _fetch_seq2seq_models():
     hub_models = list(
-        list_models(
+        _list_models_no_warn(
             task="text2text-generation",
             library="transformers",
             sort="downloads",
@@ -179,7 +187,7 @@ def _fetch_seq2seq_models():
     )
     hub_models = get_sorted_models(hub_models)
     trending_models = list(
-        list_models(
+        _list_models_no_warn(
             task="text2text-generation",
             library="transformers",
             sort="likes7d",
@@ -197,7 +205,7 @@ def _fetch_seq2seq_models():
 
 def _fetch_token_classification_models():
     hub_models1 = list(
-        list_models(
+        _list_models_no_warn(
             task="fill-mask",
             library="transformers",
             sort="downloads",
@@ -207,7 +215,7 @@ def _fetch_token_classification_models():
         )
     )
     hub_models2 = list(
-        list_models(
+        _list_models_no_warn(
             task="token-classification",
             library="transformers",
             sort="downloads",
@@ -220,7 +228,7 @@ def _fetch_token_classification_models():
     hub_models = get_sorted_models(hub_models)
 
     trending_models = list(
-        list_models(
+        _list_models_no_warn(
             task="fill-mask",
             library="transformers",
             sort="likes7d",
@@ -239,7 +247,7 @@ def _fetch_token_classification_models():
 
 def _fetch_st_models():
     hub_models1 = list(
-        list_models(
+        _list_models_no_warn(
             task="sentence-similarity",
             library="sentence-transformers",
             sort="downloads",
@@ -249,7 +257,7 @@ def _fetch_st_models():
         )
     )
     hub_models2 = list(
-        list_models(
+        _list_models_no_warn(
             task="fill-mask",
             library="transformers",
             sort="downloads",
@@ -263,7 +271,7 @@ def _fetch_st_models():
     hub_models = get_sorted_models(hub_models)
 
     trending_models = list(
-        list_models(
+        _list_models_no_warn(
             task="sentence-similarity",
             library="sentence-transformers",
             sort="likes7d",
@@ -281,7 +289,7 @@ def _fetch_st_models():
 
 def _fetch_vlm_models():
     hub_models1 = list(
-        list_models(
+        _list_models_no_warn(
             task="image-text-to-text",
             sort="downloads",
             direction=-1,
@@ -291,7 +299,7 @@ def _fetch_vlm_models():
         )
     )
     # hub_models2 = list(
-    #     list_models(
+    #     _list_models_no_warn(
     #         task="image-text-to-text",
     #         sort="downloads",
     #         direction=-1,
@@ -305,7 +313,7 @@ def _fetch_vlm_models():
     hub_models = get_sorted_models(hub_models)
 
     trending_models1 = list(
-        list_models(
+        _list_models_no_warn(
             task="image-text-to-text",
             sort="likes7d",
             direction=-1,
@@ -315,7 +323,7 @@ def _fetch_vlm_models():
         )
     )
     # trending_models2 = list(
-    #     list_models(
+    #     _list_models_no_warn(
     #         task="image-text-to-text",
     #         sort="likes7d",
     #         direction=-1,

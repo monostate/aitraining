@@ -190,6 +190,21 @@ def get_callbacks(config):
 
 def get_model(config):
     logger.info("loading model config...")
+
+    # Check for MPS + quantization incompatibility FIRST
+    import os
+
+    mps_available = torch.backends.mps.is_available()
+    if mps_available and config.peft and config.quantization and config.quantization != "none":
+        force_mps = os.environ.get("AUTOTRAIN_ENABLE_MPS", "0") == "1"
+        if not force_mps:
+            logger.warning(
+                f"Quantization ({config.quantization}) with PEFT is not fully compatible with MPS. "
+                "Disabling quantization for MPS. Use CUDA for quantization support or set AUTOTRAIN_ENABLE_MPS=1 to force (may fail)."
+            )
+            # Disable quantization on MPS
+            config.quantization = None
+
     model_config = AutoConfig.from_pretrained(
         config.model,
         token=config.token,
@@ -199,14 +214,22 @@ def get_model(config):
 
     logger.info("loading model...")
     if config.peft:
-        if config.quantization == "int4":
+        # Check if CUDA is available for quantization
+        cuda_available = torch.cuda.is_available()
+
+        if config.quantization and not cuda_available:
+            logger.warning(
+                f"Quantization {config.quantization} requested but CUDA not available. Skipping quantization."
+            )
+            bnb_config = None
+        elif config.quantization == "int4" and cuda_available:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_use_double_quant=False,
             )
-        elif config.quantization == "int8":
+        elif config.quantization == "int8" and cuda_available:
             bnb_config = BitsAndBytesConfig(load_in_8bit=True)
         else:
             bnb_config = None
@@ -280,10 +303,37 @@ def merge_adapter(base_model_path, target_model_path, adapter_path):
     model.save_pretrained(target_model_path)
 
 
-def post_training_steps(config, trainer):
+def post_training_steps(config, trainer, processor=None):
     logger.info("Finished training, saving model...")
+
+    # Create output directory if it doesn't exist
+    os.makedirs(config.project_name, exist_ok=True)
+
     trainer.model.config.use_cache = True
+
+    # For PEFT adapters, save config.json to preserve model configuration
+    if config.peft and not getattr(config, "merge_adapter", False):
+        cfg_path = os.path.join(config.project_name, "config.json")
+        logger.info("Saving model config to preserve modifications...")
+
+        # Get the base model config
+        if hasattr(trainer.model, "peft_config"):
+            # Model is a PEFT model, get base model config
+            base_model = trainer.model.get_base_model()
+            model_config = base_model.config
+        else:
+            model_config = trainer.model.config
+
+        # Save the config
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            f.write(model_config.to_json_string())
+        logger.info(f"Saved config.json before adapter save")
+
     trainer.save_model(config.project_name)
+
+    # Save processor (includes preprocessor_config.json, tokenizer files, etc.)
+    if processor is not None:
+        processor.save_pretrained(config.project_name)
 
     model_card = create_model_card(config)
 

@@ -158,8 +158,6 @@ class TextMultiClassClassificationPreprocessor(TextBinaryClassificationPreproces
         Inherits all attributes from TextBinaryClassificationPreprocessor.
     """
 
-    pass
-
 
 class TextSingleColumnRegressionPreprocessor(TextBinaryClassificationPreprocessor):
     """

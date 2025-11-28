@@ -1,0 +1,795 @@
+/* AITraining TUI - Modern Theme */
+/* Comprehensive styling for the facelift with tabs, status bar, and improved UX */
+
+/* ===== Color Variables ===== */
+$brand-primary: #2563eb;
+$brand-success: #10b981;
+$brand-warning: #f59e0b;
+$brand-error: #ef4444;
+$brand-info: #06b6d4;
+
+$bg-surface: $surface;
+$bg-panel: $panel;
+$text-primary: $text;
+$text-secondary: $text-muted;
+/* textual doesn't expose $text-disabled; define an explicit muted gray */
+$text-disabled: #6b7280;
+
+/* ===== Layout Containers ===== */
+Screen {
+    background: $bg-surface;
+}
+
+#main-container {
+    layout: vertical;
+    height: 100%;
+    width: 100%;
+}
+
+/* Top section with tabs */
+#content-container {
+    layout: horizontal;
+    height: 1fr;
+    width: 100%;
+}
+
+/* Left sidebar */
+#left-sidebar {
+    width: 32;
+    dock: left;
+    padding: 0;
+}
+
+/* Center panel */
+#center-panel {
+    width: 1fr;
+    height: 100%;
+    background: $surface;
+}
+
+/* Right panel */
+#right-panel {
+    width: 50;
+    dock: right;
+    padding: 1;
+    layout: vertical;
+}
+
+#command-section {
+    height: auto;
+    max-height: 15;
+    margin: 0 0 1 0;
+}
+
+#selectors-section {
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+#logs-section {
+    height: 1fr;
+    min-height: 10;
+    overflow-y: auto;
+}
+
+#models-header,
+#datasets-header,
+#logs-header {
+    text-style: bold;
+    color: $primary;
+    padding: 1 0;
+    margin: 1 0 0 0;
+}
+
+#model-select,
+#dataset-select {
+    margin: 0 0 1 0;
+}
+
+#log-viewer {
+    height: 100%;
+    min-height: 10;
+    background: $surface;
+    border: solid $surface-lighten-1;
+    padding: 1;
+}
+
+/* ===== Panels with Rounded Corners ===== */
+.panel {
+    border: round $brand-primary;
+    padding: 1;
+    margin: 0 1 1 0;
+    background: $bg-panel;
+}
+
+.panel-accent {
+    border: round $brand-success;
+    padding: 1;
+    margin: 0 1 1 0;
+    background: $bg-panel;
+}
+
+.panel-compact {
+    border: round $primary;
+    padding: 1;
+    margin: 0;
+    background: $bg-panel;
+}
+
+/* ===== Branding ===== */
+#branding {
+    text-style: bold;
+    color: $brand-success;
+    text-align: center;
+    padding: 1;
+    background: $bg-panel;
+    border: round $brand-primary;
+    margin: 0 1 1 0;
+}
+
+/* ===== Section Headers with Icons ===== */
+.section-header {
+    text-style: bold;
+    color: $brand-primary;
+    padding: 1;
+    text-align: left;
+    background: $bg-panel;
+    border-bottom: solid $brand-primary;
+}
+
+.section-label {
+    text-style: bold;
+    color: $text-primary;
+    padding: 0 0 1 0;
+}
+
+/* ===== Trainer Selector ===== */
+#trainer-container {
+    padding: 1;
+    height: auto;
+    margin: 0 1 1 0;
+    border: round $brand-primary;
+    background: $bg-panel;
+}
+
+#trainer-select {
+    width: 100%;
+    border: solid $primary;
+}
+
+#trainer-select:focus {
+    border: solid $brand-success;
+}
+
+/* ===== Groups List ===== */
+#groups-container {
+    height: 1fr;
+    padding: 1;
+    margin: 0 1 1 0;
+    border: round $brand-primary;
+    background: $bg-panel;
+}
+
+#groups-listview {
+    height: 1fr;
+    background: $bg-panel;
+    border: none;
+}
+
+#groups-listview ListItem {
+    padding: 0 1;
+    margin: 0;
+}
+
+#groups-listview ListItem.--highlight {
+    background: $brand-primary 30%;
+    text-style: bold;
+}
+
+.selected-group {
+    text-style: bold;
+    color: $brand-success;
+}
+
+/* ===== Tabs ===== */
+Tabs {
+    background: $bg-panel;
+    height: 100%;
+}
+
+TabbedContent {
+    height: 100%;
+}
+
+TabbedContent ContentSwitcher {
+    height: 1fr;
+}
+
+Tabs Tab {
+    text-style: bold;
+    padding: 0 2;
+}
+
+Tabs Tab.-active {
+    color: $brand-success;
+    text-style: bold;
+}
+
+Tabs Tab:hover {
+    background: $brand-primary 20%;
+}
+
+/* Tab content areas */
+#tab-parameters,
+#tab-catalog,
+#tab-logs {
+    height: 100%;
+    width: 100%;
+    padding: 1;
+}
+
+#param-scroll {
+    height: 100%;
+    width: 100%;
+    scrollbar-gutter: stable;
+}
+
+/* ===== Collapsible Sections (Advanced Tab) ===== */
+Collapsible {
+    border: round $primary;
+    margin: 0 0 1 0;
+    background: $bg-panel;
+}
+
+Collapsible CollapsibleTitle {
+    text-style: bold;
+    padding: 1;
+    background: $primary 10%;
+}
+
+Collapsible CollapsibleTitle:hover {
+    background: $brand-primary 20%;
+}
+
+Collapsible.-collapsed {
+    border: solid #6b7280;
+}
+
+/* ===== Parameter Form ===== */
+ParameterForm {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+}
+
+#param-header {
+    text-style: bold;
+    color: $primary;
+    padding: 1 2;
+    margin-bottom: 1;
+}
+
+#param-form-container {
+    padding: 1;
+    width: 100%;
+    height: auto;
+    min-height: 100%;
+}
+
+    .field-container {
+        padding: 0 0 1 0;
+        height: auto;
+        min-height: 3;
+        margin: 0 0 1 0;
+    }
+
+.field-label {
+    text-style: bold;
+    color: $text-primary;
+    padding: 0 0 0 0;
+    margin: 0 0 0 0;
+}
+
+.field-label-modified {
+    text-style: bold;
+    color: $brand-warning;
+}
+
+.field-help {
+    color: $text-secondary;
+    text-style: italic;
+    margin: 0 0 1 0;
+    padding: 0 0 0 2;
+}
+
+.field-container Input {
+    width: 100%;
+    border: solid $primary;
+    background: $bg-surface;
+}
+
+.field-container Input:focus {
+    border: solid $brand-success;
+}
+
+.field-container Select {
+    width: 100%;
+    border: solid $primary;
+}
+
+.field-container Select:focus {
+    border: solid $brand-success;
+}
+
+.field-container TextArea {
+    width: 100%;
+    border: solid $primary;
+    background: $bg-surface;
+}
+
+.field-container TextArea:focus {
+    border: solid $brand-success;
+}
+
+.field-container Checkbox {
+    width: auto;
+}
+
+/* ===== Catalog Panel Enhanced ===== */
+#catalog-container {
+    height: 100%;
+    padding: 0;
+}
+
+.catalog-section {
+    height: 50%;
+    padding: 1;
+}
+
+.catalog-title {
+    text-style: bold;
+    color: $brand-primary;
+    padding: 1;
+    background: $brand-primary 10%;
+    border-bottom: solid $brand-primary;
+}
+
+#catalog-models-list {
+    height: 1fr;
+    background: $bg-panel;
+    border: round $primary;
+    margin: 1 0;
+}
+
+#catalog-datasets-list {
+    height: 1fr;
+    background: $bg-panel;
+    border: round $primary;
+    margin: 1 0;
+}
+
+#catalog-models-list ListItem,
+#catalog-datasets-list ListItem {
+    padding: 1;
+    margin: 0;
+}
+
+#catalog-models-list ListItem.--highlight,
+#catalog-datasets-list ListItem.--highlight {
+    background: $brand-success 30%;
+    text-style: bold;
+}
+
+.catalog-item-label {
+    text-style: bold;
+    color: $text-primary;
+}
+
+.catalog-item-desc {
+    color: $text-secondary;
+    text-style: italic;
+}
+
+/* ===== Context Panel ===== */
+#context-container {
+    height: 100%;
+    padding: 1;
+    background: $bg-panel;
+    border: round $brand-primary;
+}
+
+#context-content {
+    height: 100%;
+}
+
+/* ===== Run Preview Panel (Right Sidebar) ===== */
+#preview-panel {
+    height: 100%;
+    padding: 1;
+    background: $bg-panel;
+    border: round $brand-info;
+    margin: 0 0 1 1;
+}
+
+.preview-header {
+    text-style: bold;
+    color: $brand-info;
+    padding: 1;
+    border-bottom: solid $brand-info;
+    text-align: center;
+}
+
+#preview-content {
+    height: 1fr;
+    padding: 1;
+    background: $bg-surface;
+    border: round $primary;
+    margin: 1 0;
+}
+
+#preview-text {
+    height: 100%;
+    background: $bg-surface;
+}
+
+.preview-hint {
+    color: $brand-warning;
+    text-style: italic;
+    padding: 1;
+    background: $brand-warning 10%;
+    border: round $brand-warning;
+    margin: 1 0;
+}
+
+/* ===== Status Bar (Bottom) ===== */
+#status-bar {
+    dock: bottom;
+    height: 3;
+    background: $bg-panel;
+    border-top: solid $brand-primary;
+    padding: 0 1;
+}
+
+#status-content {
+    layout: horizontal;
+    height: 100%;
+    align: left middle;
+}
+
+.status-item {
+    padding: 0 2 0 0;
+    color: $text-primary;
+}
+
+.status-label {
+    color: $text-secondary;
+    text-style: italic;
+}
+
+.status-value {
+    text-style: bold;
+    color: $brand-success;
+}
+
+.status-value-missing {
+    text-style: bold;
+    color: $brand-error;
+}
+
+.status-separator {
+    color: $text-disabled;
+    padding: 0 1;
+}
+
+/* ===== Tokens Modal ===== */
+#tokens-modal {
+    align: center middle;
+    width: 70;
+    height: 18;
+    padding: 2;
+    background: $bg-panel;
+    border: thick $brand-primary;
+}
+
+.modal-title {
+    text-style: bold;
+    text-align: center;
+    padding: 1;
+    color: $brand-primary;
+    border-bottom: solid $brand-primary;
+    margin: 0 0 1 0;
+}
+
+.token-field {
+    padding: 0 0 2 0;
+}
+
+.token-label {
+    text-style: bold;
+    color: $text-primary;
+    padding: 0 0 1 0;
+}
+
+.token-input {
+    width: 100%;
+    border: solid $primary;
+    background: $bg-surface;
+}
+
+.token-input:focus {
+    border: solid $brand-success;
+}
+
+.modal-buttons {
+    align: center middle;
+    padding: 1;
+    height: 3;
+    layout: horizontal;
+}
+
+.modal-buttons Button {
+    margin: 0 1;
+}
+
+/* ===== JSON Viewer with Copy Button ===== */
+#json-container {
+    height: 100%;
+    padding: 1;
+}
+
+#json-header {
+    height: auto;
+    layout: horizontal;
+    padding: 1;
+    background: $brand-primary 10%;
+    border-bottom: solid $brand-primary;
+}
+
+#json-title {
+    text-style: bold;
+    color: $brand-primary;
+    width: 1fr;
+}
+
+#json-copy-btn {
+    width: auto;
+}
+
+#json-content {
+    height: 1fr;
+    padding: 1;
+    background: $bg-surface;
+    border: round $primary;
+    margin: 1 0;
+}
+
+#json-text {
+    height: 100%;
+    background: $bg-surface;
+}
+
+/* ===== Log Viewer ===== */
+#log-viewer {
+    height: 100%;
+    padding: 1;
+    background: $bg-panel;
+    border: round $primary;
+}
+
+/* ===== Dialogs ===== */
+#dialog {
+    align: center middle;
+    width: 60;
+    height: 12;
+    padding: 1 2;
+    background: $bg-panel;
+    border: thick $brand-primary;
+}
+
+#dialog-title {
+    text-style: bold;
+    text-align: center;
+    padding: 1;
+    color: $brand-primary;
+    border-bottom: solid $brand-primary;
+}
+
+#dialog-buttons {
+    align: center middle;
+    padding: 1;
+    height: 3;
+}
+
+#dialog-buttons Button {
+    margin: 0 1;
+}
+
+#filename-input {
+    width: 100%;
+    margin: 1 0;
+}
+
+/* ===== Search Dialog ===== */
+#search-dialog {
+    align: center middle;
+    width: 70;
+    height: 20;
+    padding: 1 2;
+    background: $bg-panel;
+    border: thick $brand-primary;
+}
+
+#search-input {
+    width: 100%;
+    margin: 1 0;
+}
+
+#search-results {
+    height: 10;
+    margin: 1 0;
+    background: $bg-panel;
+    border: round $primary;
+}
+
+/* ===== Help Screen ===== */
+#help-screen {
+    align: center middle;
+    width: 80%;
+    height: 80%;
+    padding: 2;
+    background: $bg-panel;
+    border: thick $brand-primary;
+}
+
+#help-content {
+    height: 1fr;
+    width: 100%;
+}
+
+#close-help {
+    dock: bottom;
+    align: center middle;
+    margin: 1;
+}
+
+/* ===== Status Indicators ===== */
+.modified-indicator {
+    color: $brand-warning;
+}
+
+.error-indicator {
+    color: $brand-error;
+}
+
+.success-indicator {
+    color: $brand-success;
+}
+
+.info-indicator {
+    color: $brand-info;
+}
+
+/* ===== Loading Indicator ===== */
+LoadingIndicator {
+    background: transparent;
+    color: $brand-primary;
+}
+
+/* ===== Footer ===== */
+Footer {
+    background: $bg-panel;
+    border-top: solid $primary;
+}
+
+/* ===== Header ===== */
+Header {
+    background: $bg-panel;
+    border-bottom: solid $primary;
+}
+
+/* ===== No Content Labels ===== */
+#no-params-label {
+    text-align: center;
+    color: $text-secondary;
+    padding: 2;
+}
+
+.empty-state {
+    text-align: center;
+    color: $text-secondary;
+    padding: 2;
+    text-style: italic;
+}
+
+/* ===== Buttons ===== */
+Button {
+    border: solid $primary;
+    background: $bg-panel;
+}
+
+Button:hover {
+    background: $brand-primary 20%;
+    border: solid $brand-primary;
+}
+
+Button:focus {
+    border: solid $brand-success;
+}
+
+Button.-primary {
+    background: $brand-primary;
+    color: white;
+    text-style: bold;
+}
+
+Button.-primary:hover {
+    background: $brand-primary 80%;
+}
+
+Button.-success {
+    background: $brand-success;
+    color: white;
+    text-style: bold;
+}
+
+Button.-success:hover {
+    background: $brand-success 80%;
+}
+
+Button.-warning {
+    background: $brand-warning;
+    color: white;
+    text-style: bold;
+}
+
+Button.-warning:hover {
+    background: $brand-warning 80%;
+}
+
+/* ===== Toast Notifications ===== */
+.toast {
+    align: center top;
+    width: 50;
+    height: 3;
+    padding: 1;
+    background: $brand-success;
+    color: white;
+    text-style: bold;
+    border: round $brand-success;
+    text-align: center;
+}
+
+.toast-error {
+    background: $brand-error;
+    border: round $brand-error;
+}
+
+.toast-warning {
+    background: $brand-warning;
+    border: round $brand-warning;
+}
+
+.toast-info {
+    background: $brand-info;
+    border: round $brand-info;
+}
+
+/* ===== Accessibility & Focus ===== */
+*:focus {
+    border: solid $brand-success;
+}
+
+*:disabled {
+    color: $text-disabled;
+    background: $bg-surface 50%;
+}
+
+/* ===== Scrollbars ===== */
+ScrollableContainer:focus {
+    border: none;
+}
+
+/* ===== PPO Visibility (unchanged logic) ===== */
+.ppo-only {
+    /* Visibility controlled by app logic */
+}

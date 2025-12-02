@@ -6,6 +6,7 @@
   <a href="https://pypi.org/project/aitraining/"><img src="https://img.shields.io/pypi/v/aitraining.svg" alt="PyPI version"></a>
   <a href="https://pypi.org/project/aitraining/"><img src="https://img.shields.io/pypi/pyversions/aitraining.svg" alt="Python versions"></a>
   <a href="https://github.com/monostate/aitraining/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://docs.monostate.com"><img src="https://img.shields.io/badge/docs-monostate.com-FF6B35.svg" alt="Documentation"></a>
 </p>
 
 <p align="center">
@@ -15,6 +16,16 @@
 <p align="center">
   English | <a href="README_PTBR.md">Portugues</a>
 </p>
+
+<p align="center">
+  📚 <b><a href="https://docs.monostate.com">Full Documentation →</a></b>
+</p>
+
+---
+
+> **📖 Comprehensive Documentation Available**
+> 
+> Visit **[docs.monostate.com](https://docs.monostate.com)** for detailed guides, tutorials, API reference, and examples covering all features including LLM fine-tuning, PEFT/LoRA, DPO/ORPO training, hyperparameter sweeps, and more.
 
 ---
 
@@ -302,6 +313,19 @@ sweep:
 ---
 
 ## Documentation
+
+**📚 [docs.monostate.com](https://docs.monostate.com)** — Complete documentation with tutorials, API reference, and examples.
+
+### Quick Links
+
+- [Getting Started](https://docs.monostate.com/foundations/quickstart)
+- [LLM Fine-tuning Guide](https://docs.monostate.com/cli/llm-training)
+- [YAML Configuration](https://docs.monostate.com/cli/yaml-configs)
+- [Python SDK Reference](https://docs.monostate.com/api/python-sdk)
+- [Advanced Training (DPO/ORPO/PPO)](https://docs.monostate.com/advanced/dpo-training)
+- [Changelog](https://docs.monostate.com/changelog)
+
+### Local Docs
 
 - [Interactive Wizard Guide](docs/interactive_wizard.md)
 - [Dataset Formats & Conversion](docs/dataset_formats.md)

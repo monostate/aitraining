@@ -27,6 +27,7 @@ def train(config):
     training_args["max_length"] = config.block_size
     training_args["max_prompt_length"] = config.max_prompt_length
     training_args["max_completion_length"] = config.max_completion_length
+    training_args["beta"] = config.dpo_beta
     args = ORPOConfig(**training_args)
 
     model = utils.get_model(config, tokenizer)

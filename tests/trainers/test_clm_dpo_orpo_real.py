@@ -667,7 +667,31 @@ class TestParameterSettings:
 
             trainer = train_clm_dpo.train(params)
             assert trainer is not None
-            print(f"✅ DPO training with beta={beta} completed")
+            # Verify beta was actually passed to the trainer config
+            assert trainer.args.beta == beta, f"Expected beta={beta}, got {trainer.args.beta}"
+            print(f"✅ DPO training with beta={beta} completed and verified")
+
+    def test_orpo_beta_parameter(self, real_base_config):
+        """Test ORPO with different beta values - verifies dpo_beta is passed to ORPOConfig."""
+        print(
+            "\
+=== Testing ORPO Beta Parameter ==="
+        )
+
+        for beta in [0.01, 0.1, 0.5]:
+            config = real_base_config.copy()
+            config["dpo_beta"] = beta
+            config["epochs"] = 1
+
+            params = LLMTrainingParams(**config)
+            params.trainer = "orpo"
+
+            trainer = train_clm_orpo.train(params)
+            assert trainer is not None
+            # Verify beta was actually passed to the trainer config
+            # This test would fail before the fix (beta would always be 0.1 default)
+            assert trainer.args.beta == beta, f"Expected beta={beta}, got {trainer.args.beta}"
+            print(f"✅ ORPO training with beta={beta} completed and verified")
 
     def test_different_batch_sizes(self, real_base_config):
         """Test training with different batch sizes."""

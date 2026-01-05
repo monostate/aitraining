@@ -37,9 +37,9 @@ class VLMTrainingParams(AutoTrainParams):
         max_grad_norm (float): Max gradient norm. Default is 1.0.
         seed (int): Seed. Default is 42.
 
-        quantization (Optional[str]): Quantization (int4, int8, or None). Default is "int4".
+        quantization (Optional[str]): Quantization (int4, int8, or None). Default is None.
         target_modules (Optional[str]): Target modules. Default is "all-linear".
-        merge_adapter (bool): Merge adapter. Default is False.
+        merge_adapter (bool): Merge adapter. Default is True.
         peft (bool): Use PEFT. Default is False.
         lora_r (int): Lora r. Default is 16.
         lora_alpha (int): Lora alpha. Default is 32.

@@ -39,9 +39,7 @@ def get_model_max_position_embeddings(model_name, token=None):
         int or None: max_position_embeddings if found, None otherwise
     """
     try:
-        model_config = AutoConfig.from_pretrained(
-            model_name, token=token, trust_remote_code=ALLOW_REMOTE_CODE
-        )
+        model_config = AutoConfig.from_pretrained(model_name, token=token, trust_remote_code=ALLOW_REMOTE_CODE)
 
         # Try text_config first (VLMs like Gemma 3n, LLaVA, etc.)
         if hasattr(model_config, "text_config"):

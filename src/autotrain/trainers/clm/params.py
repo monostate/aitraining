@@ -91,7 +91,7 @@ class LLMTrainingParams(AutoTrainParams):
     model_max_length: int = Field(
         2048,
         title="Maximum length of the model input. Auto-detected from model config if not specified. "
-        "Set explicitly to override (e.g., 4096 for longer context)."
+        "Set explicitly to override (e.g., 4096 for longer context).",
     )
     padding: Optional[str] = Field("right", title="Side on which to pad sequences (left or right)")
 

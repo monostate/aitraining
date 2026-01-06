@@ -419,7 +419,9 @@ class HyperparameterSweep:
                 entity=entity,
             )
             logger.info(f"Created W&B sweep: {sweep_id} in project '{project}'")
-            logger.info(f"View sweep dashboard at: https://wandb.ai/{entity or 'your-entity'}/{project}/sweeps/{sweep_id}")
+            logger.info(
+                f"View sweep dashboard at: https://wandb.ai/{entity or 'your-entity'}/{project}/sweeps/{sweep_id}"
+            )
             return sweep_id
         except Exception as e:
             logger.warning(f"Failed to create W&B sweep: {e}")
@@ -520,7 +522,9 @@ class HyperparameterSweep:
         if wandb_sweep_id:
             sweep_result.wandb_sweep_id = wandb_sweep_id
             sweep_result.wandb_project = wandb_project
-            logger.info(f"W&B sweep completed. View results at: https://wandb.ai/{wandb_entity or 'your-entity'}/{wandb_project}/sweeps/{wandb_sweep_id}")
+            logger.info(
+                f"W&B sweep completed. View results at: https://wandb.ai/{wandb_entity or 'your-entity'}/{wandb_project}/sweeps/{wandb_sweep_id}"
+            )
 
         return sweep_result
 
@@ -698,25 +702,13 @@ def run_autotrain_sweep(
                 processed_params[name] = spec.get("values", [])
             elif param_type in ("loguniform", "log_uniform"):
                 # Log-uniform: convert to ParameterRange
-                processed_params[name] = ParameterRange(
-                    spec.get("low", 1e-5),
-                    spec.get("high", 1e-3),
-                    "log_uniform"
-                )
+                processed_params[name] = ParameterRange(spec.get("low", 1e-5), spec.get("high", 1e-3), "log_uniform")
             elif param_type == "uniform":
                 # Uniform: convert to ParameterRange
-                processed_params[name] = ParameterRange(
-                    spec.get("low", 0.0),
-                    spec.get("high", 1.0),
-                    "uniform"
-                )
+                processed_params[name] = ParameterRange(spec.get("low", 0.0), spec.get("high", 1.0), "uniform")
             elif param_type in ("int", "int_uniform"):
                 # Integer uniform: convert to ParameterRange
-                processed_params[name] = ParameterRange(
-                    spec.get("low", 1),
-                    spec.get("high", 10),
-                    "int_uniform"
-                )
+                processed_params[name] = ParameterRange(spec.get("low", 1), spec.get("high", 10), "int_uniform")
             else:
                 # Unknown type, pass through
                 processed_params[name] = spec

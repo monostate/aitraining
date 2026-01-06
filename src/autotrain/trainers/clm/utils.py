@@ -25,6 +25,51 @@ from autotrain.trainers.common import (
 )
 
 
+def get_model_max_position_embeddings(model_name, token=None):
+    """
+    Auto-detect max_position_embeddings from model config.
+
+    Handles both regular LLMs and VLMs (which have text_config).
+
+    Args:
+        model_name: Model name or path
+        token: HuggingFace token for private models
+
+    Returns:
+        int or None: max_position_embeddings if found, None otherwise
+    """
+    try:
+        model_config = AutoConfig.from_pretrained(
+            model_name, token=token, trust_remote_code=ALLOW_REMOTE_CODE
+        )
+
+        # Try text_config first (VLMs like Gemma 3n, LLaVA, etc.)
+        if hasattr(model_config, "text_config"):
+            max_pos = getattr(model_config.text_config, "max_position_embeddings", None)
+            if max_pos is not None:
+                logger.info(f"Auto-detected max_position_embeddings={max_pos} from text_config")
+                return max_pos
+
+        # Regular LLMs
+        max_pos = getattr(model_config, "max_position_embeddings", None)
+        if max_pos is not None:
+            logger.info(f"Auto-detected max_position_embeddings={max_pos} from model config")
+            return max_pos
+
+        # Some models use n_positions instead (e.g., GPT-2)
+        max_pos = getattr(model_config, "n_positions", None)
+        if max_pos is not None:
+            logger.info(f"Auto-detected n_positions={max_pos} from model config")
+            return max_pos
+
+        logger.debug(f"Could not find max_position_embeddings in {model_name} config")
+        return None
+
+    except Exception as e:
+        logger.debug(f"Failed to auto-detect max_position_embeddings: {e}")
+        return None
+
+
 def validate_required_columns(dataset, required_columns, trainer_name, data_type="training"):
     """
     Validate that required columns exist in dataset.
@@ -973,8 +1018,36 @@ def get_tokenizer(config):
         if tokenizer.chat_template is None:
             tokenizer.chat_template = DEFAULT_CHAT_TEMPLATE
 
-    if tokenizer.model_max_length > 2048:
-        tokenizer.model_max_length = config.model_max_length
+    # Determine the effective model_max_length
+    # Priority: 1) User-specified value, 2) Auto-detected from model, 3) Fallback to 2048
+    DEFAULT_MODEL_MAX_LENGTH = 2048
+
+    if config.model_max_length != DEFAULT_MODEL_MAX_LENGTH:
+        # User explicitly set model_max_length, use it
+        effective_max_length = config.model_max_length
+        logger.info(f"Using user-specified model_max_length={effective_max_length}")
+    else:
+        # Try to auto-detect from model config
+        detected_max = get_model_max_position_embeddings(config.model, config.token)
+        if detected_max is not None:
+            effective_max_length = detected_max
+            # Log if this differs significantly from the default
+            if detected_max > DEFAULT_MODEL_MAX_LENGTH:
+                logger.info(
+                    f"Model supports {detected_max} tokens. Using auto-detected value instead of default {DEFAULT_MODEL_MAX_LENGTH}. "
+                    f"Override with --model-max-length if needed."
+                )
+        else:
+            # Fallback to default with warning
+            effective_max_length = DEFAULT_MODEL_MAX_LENGTH
+            logger.warning(
+                f"Could not auto-detect model's max context length. Using default {DEFAULT_MODEL_MAX_LENGTH}. "
+                f"Set --model-max-length explicitly if your model supports longer sequences."
+            )
+
+    # Only override tokenizer's model_max_length if we have a different value
+    if tokenizer.model_max_length != effective_max_length:
+        tokenizer.model_max_length = effective_max_length
 
     if getattr(tokenizer, "pad_token", None) is None:
         tokenizer.pad_token = tokenizer.eos_token

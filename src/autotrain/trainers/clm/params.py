@@ -20,7 +20,7 @@ class LLMTrainingParams(AutoTrainParams):
         max_samples (Optional[int]): Maximum number of samples to use from dataset (for testing/debugging). Default is None.
         add_eos_token (bool): Whether to add an EOS token at the end of sequences. Default is True.
         block_size (Union[int, List[int]]): Size of the blocks for training, can be a single integer or a list of integers. Default is -1.
-        model_max_length (int): Maximum length of the model input. Default is 2048.
+        model_max_length (int): Maximum length of the model input. Auto-detected from model config if left at default (2048).
         padding (Optional[str]): Side on which to pad sequences (left or right). Default is "right".
 
         trainer (str): Type of trainer to use. Default is "default".
@@ -88,7 +88,11 @@ class LLMTrainingParams(AutoTrainParams):
     block_size: Union[int, List[int]] = Field(
         -1, title="Size of the blocks for training, can be a single integer or a list of integers"
     )
-    model_max_length: int = Field(2048, title="Maximum length of the model input")
+    model_max_length: int = Field(
+        2048,
+        title="Maximum length of the model input. Auto-detected from model config if not specified. "
+        "Set explicitly to override (e.g., 4096 for longer context)."
+    )
     padding: Optional[str] = Field("right", title="Side on which to pad sequences (left or right)")
 
     # trainer params

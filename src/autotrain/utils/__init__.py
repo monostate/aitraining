@@ -495,6 +495,12 @@ class HyperparameterSweep:
                         config=params,
                         reinit=True,
                     )
+
+                    # Set env vars so trainer's internal wandb.init() resumes this run
+                    # instead of creating a duplicate
+                    if wandb.run is not None:
+                        os.environ["WANDB_RUN_ID"] = wandb.run.id
+                        os.environ["WANDB_RESUME"] = "allow"
                 except Exception as e:
                     logger.warning(f"Failed to init W&B run for trial {trial.number}: {e}")
 

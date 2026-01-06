@@ -24,6 +24,16 @@ def train(config):
     if isinstance(config, dict):
         config = LLMTrainingParams(**config)
 
+    # Set W&B run ID env var if provided (enables resuming existing run)
+    if getattr(config, "wandb_run_id", None):
+        import os
+
+        from autotrain import logger
+
+        os.environ["WANDB_RUN_ID"] = config.wandb_run_id
+        os.environ["WANDB_RESUME"] = "allow"
+        logger.info(f"Resuming W&B run: {config.wandb_run_id}")
+
     if config.trainer == "default":
         from autotrain.trainers.clm.train_clm_default import train as train_default
 

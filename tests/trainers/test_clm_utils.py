@@ -266,3 +266,49 @@ class TestModelDtypeLoading:
         # torch_dtype should NOT be in kwargs for MPS path
         assert "torch_dtype" not in model_kwargs
         assert "device_map" not in model_kwargs
+
+
+class TestValidateRequiredColumns:
+    """Tests for validate_required_columns with helpful hints."""
+
+    def test_missing_text_column_with_messages_shows_hint(self):
+        """Test that missing 'text' column shows hint when 'messages' is available."""
+        from autotrain.trainers.clm.utils import validate_required_columns
+
+        # Mock dataset with 'messages' column but no 'text'
+        mock_dataset = MagicMock()
+        mock_dataset.column_names = ["messages", "id"]
+
+        with pytest.raises(ValueError) as exc_info:
+            validate_required_columns(mock_dataset, ["text"], "SFT", "training")
+
+        error_message = str(exc_info.value)
+        assert "text" in error_message
+        assert "messages" in error_message
+        assert "--text-column messages" in error_message
+        assert "Hint:" in error_message
+
+    def test_missing_column_without_messages_no_hint(self):
+        """Test that missing column without 'messages' doesn't show the hint."""
+        from autotrain.trainers.clm.utils import validate_required_columns
+
+        # Mock dataset without 'messages' column
+        mock_dataset = MagicMock()
+        mock_dataset.column_names = ["content", "label"]
+
+        with pytest.raises(ValueError) as exc_info:
+            validate_required_columns(mock_dataset, ["text"], "SFT", "training")
+
+        error_message = str(exc_info.value)
+        assert "text" in error_message
+        assert "--text-column messages" not in error_message
+
+    def test_valid_columns_no_error(self):
+        """Test that valid columns don't raise error."""
+        from autotrain.trainers.clm.utils import validate_required_columns
+
+        mock_dataset = MagicMock()
+        mock_dataset.column_names = ["text", "label"]
+
+        # Should not raise
+        validate_required_columns(mock_dataset, ["text"], "SFT", "training")

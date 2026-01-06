@@ -270,6 +270,7 @@ FIELD_SCOPES = {
     "wandb_sweep_project": ["all"],
     "wandb_sweep_entity": ["all"],
     "wandb_sweep_id": ["all"],
+    "wandb_run_id": ["all"],
     # Enhanced eval - all trainers
     "use_enhanced_eval": ["all"],
     "eval_metrics": ["all"],

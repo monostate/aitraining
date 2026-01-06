@@ -84,11 +84,21 @@ def validate_required_columns(dataset, required_columns, trainer_name, data_type
     missing = [col for col in required_columns if col not in dataset.column_names]
     if missing:
         available = list(dataset.column_names)
+
+        # Build helpful hints for common column mapping issues
+        hints = []
+        if "text" in missing and "messages" in available:
+            hints.append(
+                "Hint: Your dataset has a 'messages' column. Use --text-column messages for chat format data."
+            )
+
+        hint_str = "\n\n" + "\n".join(hints) if hints else ""
+
         raise ValueError(
             f"{trainer_name} trainer requires {data_type} data to have columns: {required_columns}\n"
             f"Columns {missing} not found in dataset.\n"
             f"Available columns in your data: {available}\n\n"
-            f"Please ensure your CSV/JSON has the required columns."
+            f"Please ensure your CSV/JSON has the required columns.{hint_str}"
         )
 
 

@@ -219,6 +219,9 @@ class LLMTrainingParams(AutoTrainParams):
     wandb_sweep_project: Optional[str] = Field(None, title="W&B project name for sweep (defaults to project_name)")
     wandb_sweep_entity: Optional[str] = Field(None, title="W&B entity (team/username) for sweep")
     wandb_sweep_id: Optional[str] = Field(None, title="Existing W&B sweep ID to continue (skips creating new sweep)")
+    wandb_run_id: Optional[str] = Field(
+        None, title="W&B run ID to resume (prevents trainer from creating duplicate run)"
+    )
 
     # Enhanced Evaluation
     use_enhanced_eval: bool = Field(False, title="Enable enhanced evaluation metrics")

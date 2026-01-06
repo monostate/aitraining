@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "aitraining"
 version = "0.0.8"
 description = "Advanced Machine Learning Training Platform - IN DEVELOPMENT"
-readme = "PYPI_README.md"
+readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "Apache 2.0"}
 authors = [

@@ -364,6 +364,52 @@ def test_run_autotrain_sweep():
         assert len(result.trials) == 5
 
 
+def test_run_autotrain_sweep_dict_format():
+    """Test AutoTrain sweep with dict format parameters (e.g., from JSON)."""
+    model_config = {
+        "model": "gpt2",
+        "learning_rate": 1e-4,
+        "train_batch_size": 8,
+    }
+
+    # Dict format as documented: {"type": "categorical", "values": [...]}
+    sweep_parameters = {
+        "learning_rate": {"type": "loguniform", "low": 1e-5, "high": 1e-3},
+        "train_batch_size": {"type": "categorical", "values": [4, 8, 16]},
+        "warmup_ratio": {"type": "uniform", "low": 0.0, "high": 0.2},
+        "epochs": {"type": "int", "low": 1, "high": 5},
+    }
+
+    def mock_train(params):
+        # Verify params are correctly sampled
+        assert "learning_rate" in params
+        assert "train_batch_size" in params
+        assert "warmup_ratio" in params
+        assert "epochs" in params
+        # Check batch_size is from the categorical values
+        assert params["train_batch_size"] in [4, 8, 16]
+        # Check learning_rate is in log-uniform range
+        assert 1e-5 <= params["learning_rate"] <= 1e-3
+        # Check warmup_ratio is in uniform range
+        assert 0.0 <= params["warmup_ratio"] <= 0.2
+        # Check epochs is an integer in range
+        assert 1 <= params["epochs"] <= 5
+        return np.random.random()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        result = run_autotrain_sweep(
+            model_config,
+            sweep_parameters,
+            train_function=mock_train,
+            n_trials=5,
+            backend="random",
+            output_dir=tmp_dir,
+        )
+
+        assert isinstance(result, SweepResult)
+        assert len(result.trials) == 5
+
+
 def test_sweep_parallel_trials():
     """Test parallel trial execution."""
     config = SweepConfig(
@@ -495,3 +541,90 @@ def test_wandb_sweep_config_passed_to_run_autotrain_sweep():
         assert call_args.wandb_sweep is True
         assert call_args.wandb_project == "my-project"
         assert call_args.wandb_entity == "my-team"
+
+
+def _is_wandb_available_and_logged_in():
+    """Check if wandb is installed and logged in."""
+    try:
+        import wandb
+        return wandb.api.api_key is not None
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(
+    not _is_wandb_available_and_logged_in(),
+    reason="W&B not available or not logged in (run: wandb login)"
+)
+class TestWandbSweepRealIntegration:
+    """Real W&B integration tests - only run when logged in."""
+
+    def test_wandb_sweep_creates_real_sweep(self):
+        """Test that W&B sweep is created and runs are linked in real W&B."""
+        import time
+
+        config = SweepConfig(
+            parameters={
+                "lr": ParameterRange(low=1e-5, high=1e-3, distribution="log_uniform"),
+                "batch_size": [2, 4],
+            },
+            n_trials=2,
+            backend=SweepBackend.OPTUNA,
+            direction="minimize",
+            metric="loss",
+            wandb_sweep=True,
+            wandb_project="aitraining-pytest-sweep",
+        )
+
+        def mock_train(params):
+            time.sleep(0.1)
+            return params.get("lr", 1e-4) * 100
+
+        sweep = HyperparameterSweep(config, mock_train)
+        result = sweep.run()
+
+        # Verify sweep was created
+        assert hasattr(result, "wandb_sweep_id")
+        assert result.wandb_sweep_id is not None
+        assert len(result.wandb_sweep_id) > 0
+        assert result.wandb_project == "aitraining-pytest-sweep"
+        assert len(result.trials) == 2
+
+    def test_wandb_sweep_continue_existing(self):
+        """Test continuing an existing W&B sweep."""
+        import time
+
+        # Create initial sweep
+        config1 = SweepConfig(
+            parameters={"lr": [1e-4, 1e-3]},
+            n_trials=1,
+            backend=SweepBackend.OPTUNA,
+            wandb_sweep=True,
+            wandb_project="aitraining-pytest-sweep",
+        )
+
+        def mock_train(params):
+            time.sleep(0.1)
+            return 0.5
+
+        sweep1 = HyperparameterSweep(config1, mock_train)
+        result1 = sweep1.run()
+
+        assert result1.wandb_sweep_id is not None
+        sweep_id = result1.wandb_sweep_id
+
+        # Continue with same sweep_id
+        config2 = SweepConfig(
+            parameters={"lr": [1e-4, 1e-3]},
+            n_trials=1,
+            backend=SweepBackend.OPTUNA,
+            wandb_sweep=True,
+            wandb_project="aitraining-pytest-sweep",
+            wandb_sweep_id=sweep_id,  # Continue existing
+        )
+
+        sweep2 = HyperparameterSweep(config2, mock_train)
+        result2 = sweep2.run()
+
+        # Should use the same sweep_id
+        assert result2.wandb_sweep_id == sweep_id

@@ -67,6 +67,7 @@ def run_with_sweep(config: LLMTrainingParams, train_func: Callable) -> Any:
         wandb_sweep=getattr(config, "wandb_sweep", False),
         wandb_project=getattr(config, "wandb_sweep_project", None) or config.project_name,
         wandb_entity=getattr(config, "wandb_sweep_entity", None),
+        wandb_sweep_id=getattr(config, "wandb_sweep_id", None),
     )
 
     logger.info(f"Sweep completed! Best params: {result.best_params}")

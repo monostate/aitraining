@@ -143,6 +143,7 @@ class SweepConfig:
     wandb_sweep: bool = False  # Enable W&B native sweep dashboard
     wandb_project: Optional[str] = None  # W&B project name for sweep
     wandb_entity: Optional[str] = None  # W&B entity (team/username)
+    wandb_sweep_id: Optional[str] = None  # Existing sweep ID to continue
 
 
 class SweepResult:
@@ -313,9 +314,14 @@ class HyperparameterSweep:
         return False
 
     def _create_wandb_sweep(self) -> Optional[str]:
-        """Create a W&B sweep and return the sweep_id."""
+        """Create a W&B sweep and return the sweep_id, or use existing one."""
         if not self.config.wandb_sweep:
             return None
+
+        # If existing sweep_id provided, use it instead of creating new
+        if self.config.wandb_sweep_id:
+            logger.info(f"Continuing existing W&B sweep: {self.config.wandb_sweep_id}")
+            return self.config.wandb_sweep_id
 
         try:
             import wandb
@@ -657,6 +663,7 @@ def run_autotrain_sweep(
     wandb_sweep: bool = False,
     wandb_project: Optional[str] = None,
     wandb_entity: Optional[str] = None,
+    wandb_sweep_id: Optional[str] = None,
 ) -> SweepResult:
     """
     Convenience function to run hyperparameter sweep for AutoTrain.
@@ -682,6 +689,37 @@ def run_autotrain_sweep(
             processed_params[name] = ParameterRange(low, high, dist)
         elif isinstance(spec, list):
             processed_params[name] = spec
+        elif isinstance(spec, dict) and "type" in spec:
+            # Handle dict format: {"type": "categorical", "values": [...]}
+            # or {"type": "loguniform", "low": x, "high": y}
+            param_type = spec.get("type", "").lower()
+            if param_type == "categorical":
+                # Categorical: extract values list
+                processed_params[name] = spec.get("values", [])
+            elif param_type in ("loguniform", "log_uniform"):
+                # Log-uniform: convert to ParameterRange
+                processed_params[name] = ParameterRange(
+                    spec.get("low", 1e-5),
+                    spec.get("high", 1e-3),
+                    "log_uniform"
+                )
+            elif param_type == "uniform":
+                # Uniform: convert to ParameterRange
+                processed_params[name] = ParameterRange(
+                    spec.get("low", 0.0),
+                    spec.get("high", 1.0),
+                    "uniform"
+                )
+            elif param_type in ("int", "int_uniform"):
+                # Integer uniform: convert to ParameterRange
+                processed_params[name] = ParameterRange(
+                    spec.get("low", 1),
+                    spec.get("high", 10),
+                    "int_uniform"
+                )
+            else:
+                # Unknown type, pass through
+                processed_params[name] = spec
         else:
             processed_params[name] = spec
 
@@ -703,6 +741,7 @@ def run_autotrain_sweep(
         wandb_sweep=wandb_sweep,
         wandb_project=wandb_project,
         wandb_entity=wandb_entity,
+        wandb_sweep_id=wandb_sweep_id,
     )
 
     sweep = HyperparameterSweep(config)

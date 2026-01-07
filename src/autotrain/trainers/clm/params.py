@@ -182,6 +182,12 @@ class LLMTrainingParams(AutoTrainParams):
     push_to_hub: bool = Field(False, title="Whether to push the model to the Hugging Face Hub")
     username: Optional[str] = Field(None, title="Hugging Face username for authentication")
     token: Optional[str] = Field(None, title="Hugging Face token for authentication")
+    repo_id: Optional[str] = Field(
+        None,
+        title="Full Hugging Face repo ID for push_to_hub (e.g., 'my-org/my-model' or 'username/model-name'). "
+        "If not set, defaults to '{username}/{project_name}'. Use this to push to an organization or use a "
+        "different repo name than your local project_name.",
+    )
 
     # unsloth
     unsloth: bool = Field(False, title="Whether to use the unsloth library")

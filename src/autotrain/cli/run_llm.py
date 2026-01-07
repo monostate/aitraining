@@ -102,6 +102,7 @@ FIELD_GROUPS = {
     "push_to_hub": "Hub Integration",
     "username": "Hub Integration",
     "token": "Hub Integration",
+    "repo_id": "Hub Integration",
     "wandb_token": "Hub Integration",
     "unsloth": "Hub Integration",
     # Knowledge Distillation
@@ -242,6 +243,7 @@ FIELD_SCOPES = {
     "push_to_hub": ["all"],
     "username": ["all"],
     "token": ["all"],
+    "repo_id": ["all"],
     "wandb_token": ["all"],
     "unsloth": ["all"],
     # DPO/ORPO specific

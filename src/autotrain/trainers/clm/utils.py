@@ -812,7 +812,11 @@ def post_training_steps(config, trainer):
             logger.info("Pushing model to hub...")
             try:
                 api = HfApi(token=config.token)
-                repo_id = f"{config.username}/{config.project_name}"
+                # Use repo_id if provided, otherwise fall back to username/project_name
+                if getattr(config, "repo_id", None):
+                    repo_id = config.repo_id
+                else:
+                    repo_id = f"{config.username}/{config.project_name}"
                 logger.info(f"Ensuring repo exists: {repo_id}")
                 api.create_repo(repo_id=repo_id, repo_type="model", private=True, exist_ok=True)
                 logger.info(f"Uploading folder '{config.project_name}' to {repo_id}...")

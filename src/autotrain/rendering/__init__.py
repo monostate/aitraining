@@ -43,6 +43,7 @@ from .utils import (
     convert_dataset_to_conversations,
     create_chat_template,
     detect_chat_format,
+    fix_message_alternation,
     get_stop_sequences,
     parse_response,
     preprocess_messages_for_tool_role,
@@ -79,8 +80,9 @@ __all__ = [
     "detect_chat_format",
     "convert_dataset_to_conversations",
     "create_chat_template",
-    # Tool role handling
+    # Tool role and alternation handling
     "safe_apply_chat_template",
     "check_tool_role_support",
     "preprocess_messages_for_tool_role",
+    "fix_message_alternation",
 ]

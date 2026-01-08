@@ -462,26 +462,94 @@ class TokenizerNativeRenderer(MessageRenderer):
         """Check if any messages have the 'tool' role."""
         return any(msg.get("role") == "tool" for msg in messages)
 
+    def _fix_alternation(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Fix messages to ensure proper user/assistant alternation.
+
+        This handles:
+        1. Consecutive same-role messages (merge them)
+        2. System → assistant without user in between (insert placeholder user)
+        3. Assistant at start without preceding user (insert placeholder user)
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys
+
+        Returns:
+            Fixed messages with proper alternation
+        """
+        if not messages:
+            return messages
+
+        # Step 1: Merge consecutive same-role messages
+        merged = []
+        for msg in messages:
+            if merged and merged[-1]["role"] == msg["role"]:
+                # Merge content with newline separator
+                merged[-1]["content"] = f"{merged[-1]['content']}\n{msg['content']}"
+            else:
+                merged.append(msg.copy())
+
+        # Step 2: Handle alternation issues
+        result = []
+        for i, msg in enumerate(merged):
+            role = msg["role"]
+
+            if role == "system":
+                result.append(msg)
+            elif role == "assistant":
+                # Check if we need to insert a user message before assistant
+                if not result or result[-1]["role"] in ("system", "assistant"):
+                    # Assistant without preceding user - insert placeholder
+                    result.append({"role": "user", "content": "[Continued]"})
+                result.append(msg)
+            elif role == "user":
+                # Check for consecutive users (shouldn't happen after merge, but safety)
+                if result and result[-1]["role"] == "user":
+                    result[-1]["content"] = f"{result[-1]['content']}\n{msg['content']}"
+                else:
+                    result.append(msg)
+            else:
+                # Unknown role - just append
+                result.append(msg)
+
+        return result
+
     def render_conversation(self, conversation: Conversation) -> str:
         """Render conversation using tokenizer's apply_chat_template."""
         # Convert to messages format
         messages = [{"role": msg.role, "content": msg.content} for msg in conversation.messages]
 
-        # Only preprocess if we have tool messages AND tokenizer doesn't support them
+        # Only preprocess tool messages if tokenizer doesn't support them
         if self._has_tool_messages(messages) and not self._check_tool_role_support():
             from autotrain import logger
 
             logger.debug("Tokenizer doesn't support 'tool' role, converting to 'user' with [Tool Result] prefix")
             messages = self._preprocess_messages_for_alternation(messages)
 
-        # Use tokenizer's native chat template
+        # Try to apply template
         try:
             rendered = self.tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=self.config.add_generation_prompt
             )
             return rendered
         except Exception as e:
-            # Fallback if apply_chat_template fails
+            error_str = str(e).lower()
+
+            # Check if it's an alternation error - if so, try to fix it
+            if "alternate" in error_str or "must be" in error_str:
+                from autotrain import logger
+
+                logger.debug(f"Alternation error detected: {e}, attempting to fix message structure")
+                messages = self._fix_alternation(messages)
+
+                try:
+                    rendered = self.tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=self.config.add_generation_prompt
+                    )
+                    return rendered
+                except Exception as e2:
+                    logger.warning(f"Failed to apply chat template even after fixing alternation: {e2}")
+
+            # Fallback if apply_chat_template still fails
             from autotrain import logger
 
             logger.warning(f"Failed to apply tokenizer chat template: {e}, falling back to simple format")

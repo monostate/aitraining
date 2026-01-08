@@ -706,3 +706,146 @@ class TestSafeApplyChatTemplate:
         # Second call uses cache
         result2 = check_tool_role_support(tokenizer)
         assert result1 == result2
+
+
+class TestMessageAlternationFix:
+    """Tests for fix_message_alternation to handle strict alternation tokenizers."""
+
+    def test_fix_consecutive_users(self):
+        """Test merging consecutive user messages."""
+        from autotrain.rendering.utils import fix_message_alternation
+
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "user", "content": "How are you?"},
+            {"role": "assistant", "content": "I'm good!"},
+        ]
+
+        fixed = fix_message_alternation(messages)
+        assert len(fixed) == 2
+        assert fixed[0]["role"] == "user"
+        assert "Hello" in fixed[0]["content"]
+        assert "How are you?" in fixed[0]["content"]
+        assert fixed[1]["role"] == "assistant"
+
+    def test_fix_consecutive_assistants(self):
+        """Test handling consecutive assistant messages - they get merged."""
+        from autotrain.rendering.utils import fix_message_alternation
+
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi!"},
+            {"role": "assistant", "content": "How can I help?"},
+        ]
+
+        fixed = fix_message_alternation(messages)
+        # Consecutive assistants are merged
+        assert len(fixed) == 2
+        assert fixed[0]["role"] == "user"
+        assert fixed[1]["role"] == "assistant"
+        assert "Hi!" in fixed[1]["content"]
+        assert "How can I help?" in fixed[1]["content"]
+
+    def test_fix_system_then_assistant(self):
+        """Test handling system → assistant without user in between."""
+        from autotrain.rendering.utils import fix_message_alternation
+
+        messages = [
+            {"role": "system", "content": "You are helpful"},
+            {"role": "assistant", "content": "Hello, how can I help?"},
+        ]
+
+        fixed = fix_message_alternation(messages)
+        # Should insert a user message between system and assistant
+        assert len(fixed) == 3
+        assert fixed[0]["role"] == "system"
+        assert fixed[1]["role"] == "user"
+        assert fixed[1]["content"] == "[Continued]"
+        assert fixed[2]["role"] == "assistant"
+
+    def test_fix_assistant_at_start(self):
+        """Test handling assistant message at start (no preceding user)."""
+        from autotrain.rendering.utils import fix_message_alternation
+
+        messages = [
+            {"role": "assistant", "content": "Hello, I'm your assistant"},
+        ]
+
+        fixed = fix_message_alternation(messages)
+        # Should insert a user message before assistant
+        assert len(fixed) == 2
+        assert fixed[0]["role"] == "user"
+        assert fixed[0]["content"] == "[Continued]"
+        assert fixed[1]["role"] == "assistant"
+
+    def test_fix_preserves_valid_alternation(self):
+        """Test that valid alternating messages are preserved."""
+        from autotrain.rendering.utils import fix_message_alternation
+
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi!"},
+            {"role": "user", "content": "How are you?"},
+            {"role": "assistant", "content": "I'm good!"},
+        ]
+
+        fixed = fix_message_alternation(messages)
+        assert len(fixed) == 4
+        assert fixed[0]["role"] == "user"
+        assert fixed[1]["role"] == "assistant"
+        assert fixed[2]["role"] == "user"
+        assert fixed[3]["role"] == "assistant"
+
+    def test_fix_empty_messages(self):
+        """Test handling empty message list."""
+        from autotrain.rendering.utils import fix_message_alternation
+
+        fixed = fix_message_alternation([])
+        assert fixed == []
+
+    def test_fix_complex_scenario(self):
+        """Test complex scenario with multiple issues."""
+        from autotrain.rendering.utils import fix_message_alternation
+
+        messages = [
+            {"role": "system", "content": "Be helpful"},
+            {"role": "assistant", "content": "Hello"},  # No user before
+            {"role": "user", "content": "Hi"},
+            {"role": "user", "content": "Help me"},  # Consecutive users
+            {"role": "assistant", "content": "Sure"},
+        ]
+
+        fixed = fix_message_alternation(messages)
+        # Check proper alternation
+        roles = [m["role"] for m in fixed]
+        # After system, should have user, assistant, user, assistant
+        assert roles[0] == "system"
+        # Then user inserted
+        assert roles[1] == "user"
+        assert roles[2] == "assistant"
+        # Then merged user
+        assert roles[3] == "user"
+        assert "Hi" in fixed[3]["content"]
+        assert "Help me" in fixed[3]["content"]
+        assert roles[4] == "assistant"
+
+    def test_safe_apply_with_alternation_error(self):
+        """Test that safe_apply_chat_template handles alternation errors."""
+        from autotrain.rendering.utils import safe_apply_chat_template
+
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it")
+        except Exception:
+            pytest.skip("Gemma tokenizer not available")
+
+        # Messages with consecutive users - would fail strict alternation
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "user", "content": "Anyone there?"},
+            {"role": "assistant", "content": "Yes, I'm here!"},
+        ]
+
+        # Should not raise - should fix alternation automatically
+        result = safe_apply_chat_template(tokenizer, messages, tokenize=False)
+        assert "Hello" in result
+        assert "here" in result

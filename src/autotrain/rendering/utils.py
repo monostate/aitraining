@@ -95,6 +95,61 @@ def preprocess_messages_for_tool_role(messages: List[Dict[str, str]]) -> List[Di
     return processed
 
 
+def fix_message_alternation(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Fix messages to ensure proper user/assistant alternation.
+
+    This handles:
+    1. Consecutive same-role messages (merge them)
+    2. System → assistant without user in between (insert placeholder user)
+    3. Assistant at start without preceding user (insert placeholder user)
+
+    Args:
+        messages: List of message dicts with 'role' and 'content' keys
+
+    Returns:
+        Fixed messages with proper alternation
+    """
+    if not messages:
+        return messages
+
+    # Step 1: Merge consecutive same-role messages
+    merged = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content") or ""
+
+        if merged and merged[-1]["role"] == role:
+            # Merge content with newline separator
+            merged[-1]["content"] = f"{merged[-1]['content']}\n{content}"
+        else:
+            merged.append({"role": role, "content": content})
+
+    # Step 2: Handle alternation issues
+    result = []
+    for msg in merged:
+        role = msg["role"]
+
+        if role == "system":
+            result.append(msg)
+        elif role == "assistant":
+            # Check if we need to insert a user message before assistant
+            if not result or result[-1]["role"] in ("system", "assistant"):
+                # Assistant without preceding user - insert placeholder
+                result.append({"role": "user", "content": "[Continued]"})
+            result.append(msg)
+        elif role == "user":
+            # Check for consecutive users (shouldn't happen after merge, but safety)
+            if result and result[-1]["role"] == "user":
+                result[-1]["content"] = f"{result[-1]['content']}\n{msg['content']}"
+            else:
+                result.append(msg)
+        else:
+            # Unknown role - just append
+            result.append(msg)
+
+    return result
+
+
 def safe_apply_chat_template(
     tokenizer: AutoTokenizer,
     messages: List[Dict[str, str]],
@@ -102,11 +157,14 @@ def safe_apply_chat_template(
     add_generation_prompt: bool = False,
     **kwargs,
 ) -> str:
-    """Safely apply chat template with automatic tool role handling.
+    """Safely apply chat template with automatic tool role and alternation handling.
 
-    This function automatically detects if the tokenizer supports the 'tool' role
-    and preprocesses messages if needed. Use this instead of directly calling
-    tokenizer.apply_chat_template() when messages may contain tool role.
+    This function automatically:
+    1. Detects if the tokenizer supports the 'tool' role and converts if needed
+    2. Fixes alternation issues (consecutive same-role, missing user before assistant)
+
+    Use this instead of directly calling tokenizer.apply_chat_template() when
+    messages may have tool role or alternation issues.
 
     Args:
         tokenizer: The tokenizer to use
@@ -139,12 +197,39 @@ def safe_apply_chat_template(
         logger.debug("Tokenizer doesn't support 'tool' role, converting to 'user' with [Tool Result] prefix")
         messages = preprocess_messages_for_tool_role(messages)
 
-    return tokenizer.apply_chat_template(
-        messages,
-        tokenize=tokenize,
-        add_generation_prompt=add_generation_prompt,
-        **kwargs,
-    )
+    # Try to apply template
+    try:
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=tokenize,
+            add_generation_prompt=add_generation_prompt,
+            **kwargs,
+        )
+    except Exception as e:
+        error_str = str(e).lower()
+
+        # Check if it's an alternation error - if so, try to fix it
+        if "alternate" in error_str or "must be" in error_str:
+            from autotrain import logger
+
+            logger.debug(f"Alternation error detected: {e}, attempting to fix message structure")
+            messages = fix_message_alternation(messages)
+
+            try:
+                return tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=tokenize,
+                    add_generation_prompt=add_generation_prompt,
+                    **kwargs,
+                )
+            except Exception as e2:
+                from autotrain import logger
+
+                logger.warning(f"Failed to apply chat template even after fixing alternation: {e2}")
+                raise e2
+
+        # Different error, re-raise
+        raise
 
 
 def build_generation_prompt(

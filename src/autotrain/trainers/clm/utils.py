@@ -120,7 +120,7 @@ TARGET_MODULES = {
 MODEL_CARD = """
 ---
 tags:
-- autotrain
+- aitraining
 - text-generation-inference
 - text-generation{peft}
 library_name: transformers{base_model}
@@ -131,14 +131,26 @@ widget:
 license: other{dataset_tag}
 ---
 
-# Model Trained Using AutoTrain
+# {project_name}
 
-This model was trained using AutoTrain. For more information, please visit [AutoTrain](https://hf.co/docs/autotrain).
+This model was trained using [AITraining](https://github.com/monostate/aitraining).
 
-# Usage
+## Training Details
+
+| Parameter | Value |
+|-----------|-------|
+| Base Model | `{model_name}` |
+| Trainer | `{trainer}` |
+| Dataset | `{data_path}` |
+| Epochs | {epochs} |
+| Learning Rate | {lr} |
+| Batch Size | {batch_size} |
+| Block Size | {block_size} |
+{extra_params}
+
+## Usage
 
 ```python
-
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model_path = "PATH_TO_THIS_REPO"
@@ -150,7 +162,6 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype='auto'
 ).eval()
 
-# Prompt content: "hi"
 messages = [
     {{"role": "user", "content": "hi"}}
 ]
@@ -159,10 +170,11 @@ input_ids = tokenizer.apply_chat_template(conversation=messages, tokenize=True, 
 output_ids = model.generate(input_ids.to('cuda'))
 response = tokenizer.decode(output_ids[0][input_ids.shape[1]:], skip_special_tokens=True)
 
-# Model response: "Hello! How can I assist you today?"
 print(response)
 ```
 
+---
+*Trained with [AITraining](https://github.com/monostate/aitraining)*
 """
 
 
@@ -346,6 +358,11 @@ def create_model_card(config):
             - data_path (str): Path to the dataset.
             - project_name (str): Name of the project.
             - model (str): Path or identifier of the model.
+            - trainer (str): Trainer type (sft, dpo, orpo, etc.)
+            - epochs (int): Number of training epochs.
+            - lr (float): Learning rate.
+            - batch_size (int): Batch size.
+            - block_size (int): Block/sequence size.
 
     Returns:
         str: A formatted model card string.
@@ -357,18 +374,48 @@ def create_model_card(config):
 
     if config.data_path == f"{config.project_name}/autotrain-data" or os.path.isdir(config.data_path):
         dataset_tag = ""
+        data_path_display = "local"
     else:
         dataset_tag = f"\ndatasets:\n- {config.data_path}"
+        data_path_display = config.data_path
 
     if os.path.isdir(config.model):
         base_model = ""
+        model_name = os.path.basename(config.model)
     else:
         base_model = f"\nbase_model: {config.model}"
+        model_name = config.model
+
+    # Build extra params section
+    extra_params_list = []
+    if config.peft:
+        extra_params_list.append(f"| LoRA Rank | {getattr(config, 'lora_r', 'N/A')} |")
+        extra_params_list.append(f"| LoRA Alpha | {getattr(config, 'lora_alpha', 'N/A')} |")
+    if getattr(config, 'quantization', None):
+        extra_params_list.append(f"| Quantization | {config.quantization} |")
+    if getattr(config, 'chat_template', None):
+        extra_params_list.append(f"| Chat Template | {config.chat_template} |")
+    if getattr(config, 'gradient_accumulation', None):
+        extra_params_list.append(f"| Gradient Accumulation | {config.gradient_accumulation} |")
+
+    extra_params = "\n".join(extra_params_list)
+
+    # Get project name for title (use basename if path)
+    project_name = os.path.basename(config.project_name) if config.project_name else "Fine-tuned Model"
 
     model_card = MODEL_CARD.format(
         dataset_tag=dataset_tag,
         peft=peft,
         base_model=base_model,
+        project_name=project_name,
+        model_name=model_name,
+        trainer=getattr(config, 'trainer', 'sft'),
+        data_path=data_path_display,
+        epochs=getattr(config, 'epochs', 'N/A'),
+        lr=getattr(config, 'lr', 'N/A'),
+        batch_size=getattr(config, 'batch_size', 'N/A'),
+        block_size=getattr(config, 'block_size', 'N/A'),
+        extra_params=extra_params,
     )
     return model_card.strip()
 
@@ -1179,6 +1226,27 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
                     "config": config,
                 },
             )
+
+    # Save processed datasets if configured (Path 2 - normal training)
+    save_mode = getattr(config, "save_processed_data", "auto")
+    if save_mode != "none":
+        try:
+            from autotrain.data_utils import save_processed_datasets
+
+            save_processed_datasets(
+                train_data=train_data,
+                valid_data=valid_data,
+                project_name=config.project_name,
+                train_split=config.train_split,
+                valid_split=config.valid_split,
+                source_path=config.data_path,
+                username=getattr(config, "username", None),
+                token=getattr(config, "token", None),
+                save_mode=save_mode,
+            )
+        except Exception as e:
+            logger.warning(f"Could not save processed datasets: {e}")
+
     return train_data, valid_data
 
 

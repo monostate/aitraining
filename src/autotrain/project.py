@@ -40,6 +40,7 @@ def _create_text_from_messages(example):
 
 from autotrain import logger
 from autotrain.backends.base import AVAILABLE_HARDWARE
+from autotrain.data_utils import save_processed_datasets
 from autotrain.backends.endpoints import EndpointsRunner
 from autotrain.backends.local import LocalRunner
 from autotrain.backends.ngc import NGCRunner
@@ -238,6 +239,9 @@ def llm_munge_data(params, local):
 
             logger.info("Auto-converting dataset format...")
 
+            # Store original data_path to detect if from Hub
+            original_data_path = params.data_path
+
             # Load dataset to analyze and convert
             if os.path.exists(params.data_path):
                 # Local dataset
@@ -338,35 +342,28 @@ def llm_munge_data(params, local):
                     params.text_column = "text"
                     logger.info("✓ Text column created from messages as fallback")
 
-                # Save converted dataset to project directory under data_converted/
-                project_data_dir = os.path.join(params.project_name, "data_converted")
-                os.makedirs(project_data_dir, exist_ok=True)
-
-                # Convert to pandas DataFrame for consistent saving
+                # Convert to pandas DataFrame for consistent handling
                 if isinstance(dataset, pd.DataFrame):
-                    df = dataset
+                    train_df = dataset
                 else:
                     # HuggingFace Dataset
-                    df = dataset.to_pandas() if hasattr(dataset, "to_pandas") else pd.DataFrame(dataset)
+                    train_df = dataset.to_pandas() if hasattr(dataset, "to_pandas") else pd.DataFrame(dataset)
 
                 # Verify text column exists before saving
-                if "text" not in df.columns:
+                if "text" not in train_df.columns:
                     logger.error("CRITICAL: 'text' column missing after conversion! Cannot proceed.")
                     raise ValueError("Dataset conversion failed: 'text' column not created")
 
-                converted_path = os.path.join(project_data_dir, f"{params.train_split}.jsonl")
-                df.to_json(converted_path, orient="records", lines=True, force_ascii=False)
-                logger.info(f"✓ Converted dataset saved to {converted_path}")
-
-                # Also save validation split if it exists
+                # Process validation split if it exists
+                valid_df = None
                 if params.valid_split:
                     logger.info("Converting validation split...")
                     try:
                         # Load validation split
-                        if os.path.exists(params.data_path):
+                        if os.path.exists(original_data_path):
                             # Local dataset - find validation file
                             for ext in ["csv", "jsonl", "json", "parquet"]:
-                                valid_file = os.path.join(params.data_path, f"{params.valid_split}.{ext}")
+                                valid_file = os.path.join(original_data_path, f"{params.valid_split}.{ext}")
                                 if os.path.exists(valid_file):
                                     if ext == "csv":
                                         valid_dataset = pd.read_csv(valid_file)
@@ -378,7 +375,7 @@ def llm_munge_data(params, local):
                         else:
                             # HuggingFace dataset
                             valid_dataset = load_dataset(
-                                params.data_path, split=params.valid_split, trust_remote_code=True
+                                original_data_path, split=params.valid_split, trust_remote_code=True
                             )
 
                         # Convert validation dataset the same way
@@ -414,7 +411,7 @@ def llm_munge_data(params, local):
                                 else:
                                     valid_dataset = valid_dataset.map(_create_text_from_messages)
 
-                        # Convert to DataFrame and save
+                        # Convert to DataFrame
                         if isinstance(valid_dataset, pd.DataFrame):
                             valid_df = valid_dataset
                         else:
@@ -428,18 +425,44 @@ def llm_munge_data(params, local):
                         if "text" not in valid_df.columns:
                             valid_df["text"] = valid_df.apply(lambda x: _create_text_from_messages(x)["text"], axis=1)
 
-                        valid_path = os.path.join(project_data_dir, f"{params.valid_split}.jsonl")
-                        valid_df.to_json(valid_path, orient="records", lines=True, force_ascii=False)
-                        logger.info(f"✓ Validation dataset converted and saved to {valid_path}")
+                        logger.info("✓ Validation dataset converted")
                     except Exception as e:
                         logger.warning(
                             f"Could not convert validation split: {e}. Continuing with training split only."
                         )
+                        valid_df = None
 
-                # Update data path to use converted dataset
-                params.data_path = project_data_dir
-                logger.info(f"✓ Dataset converted and saved to {project_data_dir}")
-                logger.info(f"✓ Updated data_path to: {project_data_dir}")
+                # Save processed datasets using centralized function
+                save_mode = getattr(params, "save_processed_data", "auto")
+                save_result = save_processed_datasets(
+                    train_data=train_df,
+                    valid_data=valid_df,
+                    project_name=params.project_name,
+                    train_split=params.train_split,
+                    valid_split=params.valid_split,
+                    source_path=original_data_path,
+                    username=params.username,
+                    token=params.token,
+                    save_mode=save_mode,
+                )
+
+                # Update data path to use locally saved dataset (if saved locally)
+                if save_result["train"] and save_result["train"]["local_path"]:
+                    project_data_dir = os.path.dirname(save_result["train"]["local_path"])
+                    params.data_path = project_data_dir
+                    logger.info(f"✓ Updated data_path to: {project_data_dir}")
+                else:
+                    # Fallback: save locally even if save_mode was hub-only (training needs local files)
+                    project_data_dir = os.path.join(params.project_name, "data_processed")
+                    os.makedirs(project_data_dir, exist_ok=True)
+                    local_path = os.path.join(project_data_dir, f"{params.train_split}.jsonl")
+                    train_df.to_json(local_path, orient="records", lines=True, force_ascii=False)
+                    if valid_df is not None:
+                        valid_path = os.path.join(project_data_dir, f"{params.valid_split}.jsonl")
+                        valid_df.to_json(valid_path, orient="records", lines=True, force_ascii=False)
+                    params.data_path = project_data_dir
+                    logger.info(f"✓ Saved locally for training: {project_data_dir}")
+
                 logger.info(f"✓ Text column set to: {params.text_column}")
                 logger.info(f"Dataset conversion completed successfully. New data_path: {params.data_path}")
 

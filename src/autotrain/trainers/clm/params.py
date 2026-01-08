@@ -66,6 +66,9 @@ class LLMTrainingParams(AutoTrainParams):
         text_column (str): Column name for the text data. Default is "text".
         rejected_text_column (Optional[str]): Column name for the rejected text data. Default is None.
 
+        save_processed_data (str): Save processed training data: 'auto' (local + hub if from hub, hub-only if >5GB),
+            'local', 'hub', 'both', or 'none'. Default is "auto".
+
         push_to_hub (bool): Whether to push the model to the Hugging Face Hub. Default is False.
         username (Optional[str]): Hugging Face username for authentication. Default is None.
         token (Optional[str]): Hugging Face token for authentication. Default is None.
@@ -177,6 +180,11 @@ class LLMTrainingParams(AutoTrainParams):
         1, title="Merge N single-turn examples into multi-turn conversations (1 = no merging)", ge=1, le=10
     )
     apply_chat_template: bool = Field(True, title="Apply chat template during dataset conversion")
+    save_processed_data: str = Field(
+        "auto",
+        title="Save processed training data: 'auto' (local + hub if from hub, hub-only if >5GB), "
+        "'local', 'hub', 'both', or 'none'",
+    )
 
     # push to hub
     push_to_hub: bool = Field(False, title="Whether to push the model to the Hugging Face Hub")

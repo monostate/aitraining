@@ -58,6 +58,7 @@ FIELD_GROUPS = {
     "auto_convert_dataset": "Data Processing",
     "conversation_extension": "Data Processing",
     "apply_chat_template": "Data Processing",
+    "save_processed_data": "Data Processing",
     # Training Configuration
     "trainer": "Training Configuration",
     "use_flash_attention_2": "Training Configuration",
@@ -228,6 +229,7 @@ FIELD_SCOPES = {
     "suggested_chat_template": ["all"],
     "conversation_extension": ["all"],
     "apply_chat_template": ["all"],
+    "save_processed_data": ["all"],
     "column_mapping": ["all"],
     "runtime_mapping": ["all"],
     "map_eos_token": ["all"],

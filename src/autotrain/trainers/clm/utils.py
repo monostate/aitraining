@@ -487,7 +487,19 @@ def apply_chat_template_unified(
     if config.trainer in ("default", "sft"):
         # Check if 'text' column already exists and is formatted (from auto-conversion or previous processing)
         if "text" in example and isinstance(example["text"], str):
-            template_tokens = ["<bos>", "<start_of_turn>", "<|im_start|>", "<|im_end|>", "<|endoftext|>", "<eos>"]
+            # Common chat template tokens across different models:
+            # Gemma: <bos>, <eos>, <start_of_turn>, <end_of_turn>
+            # ChatML/Qwen: <|im_start|>, <|im_end|>, <|endoftext|>
+            # Llama 2/Mistral: <s>, </s>, [INST], [/INST]
+            # Llama 3: <|begin_of_text|>, <|start_header_id|>, <|eot_id|>, <|end_header_id|>
+            # Zephyr/Phi-3: <|user|>, <|assistant|>, <|system|>, <|end|>
+            template_tokens = [
+                "<bos>", "<eos>", "<start_of_turn>", "<end_of_turn>",  # Gemma
+                "<|im_start|>", "<|im_end|>", "<|endoftext|>",  # ChatML/Qwen
+                "<s>", "</s>", "[INST]", "[/INST]",  # Llama 2/Mistral
+                "<|begin_of_text|>", "<|start_header_id|>", "<|eot_id|>", "<|end_header_id|>",  # Llama 3
+                "<|user|>", "<|assistant|>", "<|system|>", "<|end|>",  # Zephyr/Phi-3
+            ]
             if any(token in example["text"] for token in template_tokens):
                 logger.debug("Skipping chat template - 'text' column already contains formatted text")
                 return example
@@ -500,7 +512,19 @@ def apply_chat_template_unified(
             messages = example["messages"]
         elif isinstance(text_value, str):
             # Check if text is already formatted (contains template tokens)
-            template_tokens = ["<bos>", "<start_of_turn>", "<|im_start|>", "<|im_end|>", "<|endoftext|>", "<eos>"]
+            # Common chat template tokens across different models:
+            # Gemma: <bos>, <eos>, <start_of_turn>, <end_of_turn>
+            # ChatML/Qwen: <|im_start|>, <|im_end|>, <|endoftext|>
+            # Llama 2/Mistral: <s>, </s>, [INST], [/INST]
+            # Llama 3: <|begin_of_text|>, <|start_header_id|>, <|eot_id|>, <|end_header_id|>
+            # Zephyr/Phi-3: <|user|>, <|assistant|>, <|system|>, <|end|>
+            template_tokens = [
+                "<bos>", "<eos>", "<start_of_turn>", "<end_of_turn>",  # Gemma
+                "<|im_start|>", "<|im_end|>", "<|endoftext|>",  # ChatML/Qwen
+                "<s>", "</s>", "[INST]", "[/INST]",  # Llama 2/Mistral
+                "<|begin_of_text|>", "<|start_header_id|>", "<|eot_id|>", "<|end_header_id|>",  # Llama 3
+                "<|user|>", "<|assistant|>", "<|system|>", "<|end|>",  # Zephyr/Phi-3
+            ]
             if any(token in text_value for token in template_tokens):
                 # Already formatted, skip processing
                 logger.debug("Skipping chat template - text column already contains formatted text from conversion")
@@ -644,7 +668,19 @@ def apply_chat_template(
     if config.trainer in ("default", "sft"):
         # Check if 'text' column already exists and is formatted
         if "text" in example and isinstance(example["text"], str):
-            template_tokens = ["<bos>", "<start_of_turn>", "<|im_start|>", "<|im_end|>", "<|endoftext|>", "<eos>"]
+            # Common chat template tokens across different models:
+            # Gemma: <bos>, <eos>, <start_of_turn>, <end_of_turn>
+            # ChatML/Qwen: <|im_start|>, <|im_end|>, <|endoftext|>
+            # Llama 2/Mistral: <s>, </s>, [INST], [/INST]
+            # Llama 3: <|begin_of_text|>, <|start_header_id|>, <|eot_id|>, <|end_header_id|>
+            # Zephyr/Phi-3: <|user|>, <|assistant|>, <|system|>, <|end|>
+            template_tokens = [
+                "<bos>", "<eos>", "<start_of_turn>", "<end_of_turn>",  # Gemma
+                "<|im_start|>", "<|im_end|>", "<|endoftext|>",  # ChatML/Qwen
+                "<s>", "</s>", "[INST]", "[/INST]",  # Llama 2/Mistral
+                "<|begin_of_text|>", "<|start_header_id|>", "<|eot_id|>", "<|end_header_id|>",  # Llama 3
+                "<|user|>", "<|assistant|>", "<|system|>", "<|end|>",  # Zephyr/Phi-3
+            ]
             if any(token in example["text"] for token in template_tokens):
                 return example
 
@@ -1142,17 +1178,19 @@ def get_tokenizer(config):
     if config.padding in ("left", "right"):
         tokenizer.padding_side = config.padding
 
-    # Disable add_bos_token when using chat templates that already include <bos>
-    # This prevents double <bos> tokens in the training data
-    if config.chat_template and hasattr(tokenizer, "add_bos_token"):
-        # Check if the tokenizer's chat template adds <bos>
+    # Disable add_bos_token when using chat templates that already include bos_token
+    # This prevents double bos tokens in the training data
+    # Different models use different bos tokens: <bos> (Gemma), <s> (Mistral/Llama2), <|begin_of_text|> (Llama3)
+    if config.chat_template and hasattr(tokenizer, "add_bos_token") and tokenizer.add_bos_token:
         try:
             test_output = tokenizer.apply_chat_template(
                 [{"role": "user", "content": "test"}], tokenize=False
             )
-            if test_output.startswith("<bos>") or "<bos>" in test_output[:20]:
+            # Check if chat template starts with the tokenizer's bos_token
+            bos = tokenizer.bos_token
+            if bos and test_output.startswith(bos):
                 tokenizer.add_bos_token = False
-                logger.info("Disabled add_bos_token (chat template already includes <bos>)")
+                logger.info(f"Disabled add_bos_token (chat template already includes {repr(bos)})")
         except Exception:
             pass  # If test fails, leave default behavior
 
@@ -1184,15 +1222,28 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
     if len(train_data) > 0:
         sample_text = train_data[0].get(config.text_column, "")
         if isinstance(sample_text, str):
-            template_tokens = ["<bos>", "<start_of_turn>", "<|im_start|>", "<|im_end|>", "<|endoftext|>", "<eos>"]
+            # Common chat template tokens across different models:
+            # Gemma: <bos>, <eos>, <start_of_turn>, <end_of_turn>
+            # ChatML/Qwen: <|im_start|>, <|im_end|>, <|endoftext|>
+            # Llama 2/Mistral: <s>, </s>, [INST], [/INST]
+            # Llama 3: <|begin_of_text|>, <|start_header_id|>, <|eot_id|>, <|end_header_id|>
+            # Zephyr/Phi-3: <|user|>, <|assistant|>, <|system|>, <|end|>
+            template_tokens = [
+                "<bos>", "<eos>", "<start_of_turn>", "<end_of_turn>",  # Gemma
+                "<|im_start|>", "<|im_end|>", "<|endoftext|>",  # ChatML/Qwen
+                "<s>", "</s>", "[INST]", "[/INST]",  # Llama 2/Mistral
+                "<|begin_of_text|>", "<|start_header_id|>", "<|eot_id|>", "<|end_header_id|>",  # Llama 3
+                "<|user|>", "<|assistant|>", "<|system|>", "<|end|>",  # Zephyr/Phi-3
+            ]
             if any(token in sample_text for token in template_tokens):
                 logger.info(
                     "Dataset already has formatted text column (from auto-conversion), skipping chat template processing"
                 )
-                # Disable add_bos_token if data already contains <bos> to prevent double <bos>
-                if "<bos>" in sample_text and hasattr(tokenizer, "add_bos_token"):
+                # Disable add_bos_token if data already contains bos_token to prevent double bos
+                bos = getattr(tokenizer, "bos_token", None)
+                if bos and bos in sample_text and hasattr(tokenizer, "add_bos_token"):
                     tokenizer.add_bos_token = False
-                    logger.info("Disabled add_bos_token (data already contains <bos>)")
+                    logger.info(f"Disabled add_bos_token (data already contains {repr(bos)})")
                 return train_data, valid_data
 
     # Map legacy chat template names to new ChatFormat

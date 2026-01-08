@@ -1142,6 +1142,20 @@ def get_tokenizer(config):
     if config.padding in ("left", "right"):
         tokenizer.padding_side = config.padding
 
+    # Disable add_bos_token when using chat templates that already include <bos>
+    # This prevents double <bos> tokens in the training data
+    if config.chat_template and hasattr(tokenizer, "add_bos_token"):
+        # Check if the tokenizer's chat template adds <bos>
+        try:
+            test_output = tokenizer.apply_chat_template(
+                [{"role": "user", "content": "test"}], tokenize=False
+            )
+            if test_output.startswith("<bos>") or "<bos>" in test_output[:20]:
+                tokenizer.add_bos_token = False
+                logger.info("Disabled add_bos_token (chat template already includes <bos>)")
+        except Exception:
+            pass  # If test fails, leave default behavior
+
     return tokenizer
 
 
@@ -1175,6 +1189,10 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
                 logger.info(
                     "Dataset already has formatted text column (from auto-conversion), skipping chat template processing"
                 )
+                # Disable add_bos_token if data already contains <bos> to prevent double <bos>
+                if "<bos>" in sample_text and hasattr(tokenizer, "add_bos_token"):
+                    tokenizer.add_bos_token = False
+                    logger.info("Disabled add_bos_token (data already contains <bos>)")
                 return train_data, valid_data
 
     # Map legacy chat template names to new ChatFormat

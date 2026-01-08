@@ -463,6 +463,30 @@ def _message_from_dict(m, Message):
     )
 
 
+def strip_bos_token(text: str, tokenizer) -> str:
+    """
+    Strip BOS token from the beginning of text if present.
+
+    This prevents double BOS tokens when the tokenizer adds BOS during training.
+    Different tokenizers use different BOS tokens:
+    - Gemma: <bos>
+    - Llama 3: <|begin_of_text|>
+    - Llama 2/Mistral: <s>
+    - ChatML/Qwen: may use various tokens
+    """
+    if not text or not tokenizer:
+        return text
+
+    bos_token = getattr(tokenizer, "bos_token", None)
+    if bos_token and text.startswith(bos_token):
+        text = text[len(bos_token):]
+        # Also strip any leading newline that might follow BOS
+        if text.startswith("\n"):
+            text = text[1:]
+
+    return text
+
+
 def apply_chat_template_unified(
     example,
     renderer,
@@ -555,7 +579,9 @@ def apply_chat_template_unified(
         conversation = Conversation(messages=[_message_from_dict(m, Message) for m in messages])
 
         # Render conversation to 'text' column (preserve original messages)
-        example["text"] = renderer.render_conversation(conversation)
+        # Strip BOS token to prevent double BOS when tokenizer adds it during training
+        rendered = renderer.render_conversation(conversation)
+        example["text"] = strip_bos_token(rendered, renderer.tokenizer)
 
     elif config.trainer == "reward":
         if all(k in example.keys() for k in ("chosen", "rejected")):
@@ -579,12 +605,13 @@ def apply_chat_template_unified(
                     rejected_messages = [{"role": "assistant", "content": rejected_messages}]
 
             # Convert and render chosen (preserving tool_calls if present)
+            # Strip BOS to prevent double BOS when tokenizer adds it during training
             chosen_conv = Conversation(messages=[_message_from_dict(m, Message) for m in chosen_messages])
-            example["chosen"] = renderer.render_conversation(chosen_conv)
+            example["chosen"] = strip_bos_token(renderer.render_conversation(chosen_conv), renderer.tokenizer)
 
             # Convert and render rejected (preserving tool_calls if present)
             rejected_conv = Conversation(messages=[_message_from_dict(m, Message) for m in rejected_messages])
-            example["rejected"] = renderer.render_conversation(rejected_conv)
+            example["rejected"] = strip_bos_token(renderer.render_conversation(rejected_conv), renderer.tokenizer)
         else:
             raise ValueError(
                 f"Could not format example as dialogue for `rm/orpo` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
@@ -620,17 +647,18 @@ def apply_chat_template_unified(
                     ]
 
             # Extract prompt (all messages except last, preserving tool_calls if present)
+            # Strip BOS to prevent double BOS when tokenizer adds it during training
             prompt_messages = chosen_messages[:-1]
             prompt_conv = Conversation(messages=[_message_from_dict(m, Message) for m in prompt_messages])
-            example["prompt"] = renderer.render_conversation(prompt_conv)
+            example["prompt"] = strip_bos_token(renderer.render_conversation(prompt_conv), renderer.tokenizer)
 
             # Render full chosen (preserving tool_calls if present)
             chosen_conv = Conversation(messages=[_message_from_dict(m, Message) for m in chosen_messages])
-            example["chosen"] = renderer.render_conversation(chosen_conv)
+            example["chosen"] = strip_bos_token(renderer.render_conversation(chosen_conv), renderer.tokenizer)
 
             # Render full rejected (preserving tool_calls if present)
             rejected_conv = Conversation(messages=[_message_from_dict(m, Message) for m in rejected_messages])
-            example["rejected"] = renderer.render_conversation(rejected_conv)
+            example["rejected"] = strip_bos_token(renderer.render_conversation(rejected_conv), renderer.tokenizer)
         else:
             raise ValueError(
                 f"Could not format example as dialogue for `{config.trainer}` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
@@ -688,9 +716,11 @@ def apply_chat_template(
         if isinstance(messages, str):
             messages = ast.literal_eval(messages)
         # Create 'text' column instead of overwriting text_column (preserve original messages)
-        example["text"] = safe_apply_chat_template(
+        # Strip BOS token to prevent double BOS when tokenizer adds it during training
+        rendered_text = safe_apply_chat_template(
             tokenizer, messages, tokenize=False, add_generation_prompt=False
         )
+        example["text"] = strip_bos_token(rendered_text, tokenizer)
 
     elif config.trainer == "reward":
         if all(k in example.keys() for k in ("chosen", "rejected")):
@@ -706,8 +736,13 @@ def apply_chat_template(
             if config.chat_template == "zephyr" and rejected_messages[0]["role"] != "system":
                 rejected_messages.insert(0, {"role": "system", "content": ""})
 
-            example["chosen"] = safe_apply_chat_template(tokenizer, chosen_messages, tokenize=False)
-            example["rejected"] = safe_apply_chat_template(tokenizer, rejected_messages, tokenize=False)
+            # Strip BOS to prevent double BOS when tokenizer adds it during training
+            example["chosen"] = strip_bos_token(
+                safe_apply_chat_template(tokenizer, chosen_messages, tokenize=False), tokenizer
+            )
+            example["rejected"] = strip_bos_token(
+                safe_apply_chat_template(tokenizer, rejected_messages, tokenize=False), tokenizer
+            )
         else:
             raise ValueError(
                 f"Could not format example as dialogue for `rm/orpo` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
@@ -725,9 +760,16 @@ def apply_chat_template(
                 prompt_messages.insert(0, {"role": "system", "content": ""})
             chosen_messages = example["chosen"][-1:]
             rejected_messages = example["rejected"][-1:]
-            example["chosen"] = safe_apply_chat_template(tokenizer, chosen_messages, tokenize=False)
-            example["rejected"] = safe_apply_chat_template(tokenizer, rejected_messages, tokenize=False)
-            example["prompt"] = safe_apply_chat_template(tokenizer, prompt_messages, tokenize=False)
+            # Strip BOS to prevent double BOS when tokenizer adds it during training
+            example["chosen"] = strip_bos_token(
+                safe_apply_chat_template(tokenizer, chosen_messages, tokenize=False), tokenizer
+            )
+            example["rejected"] = strip_bos_token(
+                safe_apply_chat_template(tokenizer, rejected_messages, tokenize=False), tokenizer
+            )
+            example["prompt"] = strip_bos_token(
+                safe_apply_chat_template(tokenizer, prompt_messages, tokenize=False), tokenizer
+            )
     else:
         raise ValueError(
             f"Could not format example as dialogue for `dpo` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
@@ -1239,11 +1281,21 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
                 logger.info(
                     "Dataset already has formatted text column (from auto-conversion), skipping chat template processing"
                 )
-                # Disable add_bos_token if data already contains bos_token to prevent double bos
+                # Strip BOS from existing data to prevent double BOS during training
+                # This handles all tokenizers (including Llama 3 which lacks add_bos_token)
                 bos = getattr(tokenizer, "bos_token", None)
-                if bos and bos in sample_text and hasattr(tokenizer, "add_bos_token"):
-                    tokenizer.add_bos_token = False
-                    logger.info(f"Disabled add_bos_token (data already contains {repr(bos)})")
+                if bos and sample_text.startswith(bos):
+                    logger.info(f"Stripping BOS token from already-formatted data to prevent double BOS")
+
+                    def strip_existing_bos(example):
+                        if "text" in example and isinstance(example["text"], str):
+                            example["text"] = strip_bos_token(example["text"], tokenizer)
+                        return example
+
+                    train_data = train_data.map(strip_existing_bos, load_from_cache_file=False)
+                    if valid_data is not None:
+                        valid_data = valid_data.map(strip_existing_bos, load_from_cache_file=False)
+
                 return train_data, valid_data
 
     # Map legacy chat template names to new ChatFormat

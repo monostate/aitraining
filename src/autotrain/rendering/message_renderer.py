@@ -592,10 +592,18 @@ class TokenizerNativeRenderer(MessageRenderer):
             content = msg.content or ""
             # Only serialize tool_calls if tokenizer doesn't support them natively
             if msg.tool_calls and should_serialize_tool_calls:
-                tool_calls_json = json.dumps(msg.tool_calls, ensure_ascii=False, indent=2)
-                content = (
-                    f"{content}\n\n[Tool Calls]\n{tool_calls_json}" if content else f"[Tool Calls]\n{tool_calls_json}"
-                )
+                # Transform tool_calls to clean format (not raw OpenAI format with "function" key)
+                for tc in msg.tool_calls:
+                    func = tc.get("function", {})
+                    tool_name = func.get("name", "unknown")
+                    args = func.get("arguments", "{}")
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except json.JSONDecodeError:
+                            pass
+                    tool_json = json.dumps({"tool": tool_name, "arguments": args}, ensure_ascii=False)
+                    content = f"{content}\n[Tool Call] {tool_json}" if content else f"[Tool Call] {tool_json}"
                 messages.append({"role": msg.role, "content": content})
             elif msg.tool_calls:
                 # Tokenizer supports tool_calls natively - pass them through

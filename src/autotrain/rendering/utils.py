@@ -196,8 +196,9 @@ def preprocess_messages_for_tool_role(messages: List[Dict[str, str]]) -> List[Di
         role = msg.get("role", "user")
         content = msg.get("content") or ""
 
-        # Convert 'tool' role to 'user' (tool responses are external input like user messages)
-        if role == "tool":
+        # Convert 'tool' or 'function' role to 'user' (tool responses are external input like user messages)
+        # Note: 'function' is the older OpenAI format, 'tool' is the newer format
+        if role in ("tool", "function"):
             role = "user"
             content = f"[Tool Result] {content}"
 

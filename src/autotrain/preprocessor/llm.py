@@ -588,10 +588,19 @@ def apply_chat_template(
             for m in messages:
                 role = m.get("role", "user")
                 content = m.get("content") or ""
-                # Serialize tool_calls to content
+                # Serialize tool_calls to clean format (not raw OpenAI format with "function" key)
                 if m.get("tool_calls"):
-                    tool_json = json.dumps(m["tool_calls"], ensure_ascii=False)
-                    content = f"{content}\n[Tool Calls] {tool_json}" if content else f"[Tool Calls] {tool_json}"
+                    for tc in m["tool_calls"]:
+                        func = tc.get("function", {})
+                        tool_name = func.get("name", "unknown")
+                        args = func.get("arguments", "{}")
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except json.JSONDecodeError:
+                                pass
+                        tool_json = json.dumps({"tool": tool_name, "arguments": args}, ensure_ascii=False)
+                        content = f"{content}\n[Tool Call] {tool_json}" if content else f"[Tool Call] {tool_json}"
                 parts.append(f"{role}: {content}")
             text = "\n".join(parts)
             return {output_column: text}

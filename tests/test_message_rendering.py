@@ -1087,3 +1087,49 @@ class TestToolCallsSerialization:
 
         conv2 = Conversation.from_dict(data)
         assert conv2.messages[0].tool_call_id == "call_123"
+
+    def test_function_role_converted_like_tool(self):
+        """Test that 'function' role (older OpenAI format) is converted same as 'tool'."""
+        from autotrain.rendering.utils import preprocess_messages_for_tool_role
+
+        messages = [
+            {"role": "user", "content": "What's 2+2?"},
+            {"role": "assistant", "content": "Let me calculate."},
+            {"role": "function", "content": "4"},  # Older OpenAI format uses "function"
+            {"role": "assistant", "content": "The answer is 4."},
+        ]
+
+        processed = preprocess_messages_for_tool_role(messages)
+
+        # function role should be converted to user with [Tool Result] prefix
+        assert processed[2]["role"] == "user"
+        assert "[Tool Result]" in processed[2]["content"]
+        assert "4" in processed[2]["content"]
+
+    def test_serialize_tool_calls_clean_format_not_function(self):
+        """Test that tool_calls serialization produces clean format, not raw OpenAI format with 'function' key."""
+        from autotrain.rendering.utils import serialize_tool_calls_to_content
+
+        messages = [
+            {
+                "role": "assistant",
+                "content": "Let me search.",
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "search", "arguments": '{"query": "weather"}'},
+                    }
+                ],
+            }
+        ]
+
+        serialized = serialize_tool_calls_to_content(messages)
+        content = serialized[0]["content"]
+
+        # Should produce clean format: {"tool": "search", "arguments": {...}}
+        assert '"tool": "search"' in content or '"tool":"search"' in content
+        # Should NOT contain raw OpenAI format with "function" key
+        assert '"function":' not in content
+        assert '"type": "function"' not in content
+        assert '"id": "call_123"' not in content

@@ -21,10 +21,19 @@ def _create_text_from_messages(example):
     for msg in messages:
         role = msg.get("role", "user")
         content = msg.get("content") or ""
-        # Serialize tool_calls to content
+        # Serialize tool_calls to clean format (not raw OpenAI format with "function" key)
         if msg.get("tool_calls"):
-            tool_json = json.dumps(msg["tool_calls"], ensure_ascii=False)
-            content = f"{content}\n[Tool Calls] {tool_json}" if content else f"[Tool Calls] {tool_json}"
+            for tc in msg["tool_calls"]:
+                func = tc.get("function", {})
+                tool_name = func.get("name", "unknown")
+                args = func.get("arguments", "{}")
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        pass
+                tool_json = json.dumps({"tool": tool_name, "arguments": args}, ensure_ascii=False)
+                content = f"{content}\n[Tool Call] {tool_json}" if content else f"[Tool Call] {tool_json}"
         text_parts.append(f"{role}: {content}")
     return {"text": "\n".join(text_parts)}
 

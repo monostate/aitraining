@@ -372,7 +372,17 @@ class MessageCompleter(Completer):
             messages = []
             if system_prompt:
                 messages.append(Message(role="system", content=system_prompt))
-            messages.extend([Message(role=m["role"], content=m["content"]) for m in conversation])
+            messages.extend(
+                [
+                    Message(
+                        role=m["role"],
+                        content=m.get("content") or "",
+                        tool_calls=m.get("tool_calls"),
+                        tool_call_id=m.get("tool_call_id"),
+                    )
+                    for m in conversation
+                ]
+            )
             conversation = Conversation(messages=messages)
         elif system_prompt:
             # Prepend system message

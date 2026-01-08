@@ -2,9 +2,32 @@
 Copyright 2023 The HuggingFace Team
 """
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Union
+
+
+def _create_text_from_messages(example):
+    """Helper to create text from messages, preserving tool_calls.
+
+    Note: This is a fallback for when template application fails.
+    It preserves tool role as-is since there's no tokenizer to check support.
+    """
+    messages = example.get("messages", [])
+    if not messages:
+        return {"text": ""}
+    text_parts = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content") or ""
+        # Serialize tool_calls to content
+        if msg.get("tool_calls"):
+            tool_json = json.dumps(msg["tool_calls"], ensure_ascii=False)
+            content = f"{content}\n[Tool Calls] {tool_json}" if content else f"[Tool Calls] {tool_json}"
+        text_parts.append(f"{role}: {content}")
+    return {"text": "\n".join(text_parts)}
+
 
 from autotrain import logger
 from autotrain.backends.base import AVAILABLE_HARDWARE
@@ -287,22 +310,10 @@ def llm_munge_data(params, local):
                         logger.info("Falling back to simple message formatting...")
 
                         # Fallback: create text column from messages manually
-                        def create_text_from_messages(example):
-                            messages = example.get("messages", [])
-                            if not messages:
-                                return {"text": ""}
-                            # Simple concatenation fallback
-                            text_parts = []
-                            for msg in messages:
-                                role = msg.get("role", "user")
-                                content = msg.get("content", "")
-                                text_parts.append(f"{role}: {content}")
-                            return {"text": "\n".join(text_parts)}
-
                         if isinstance(dataset, pd.DataFrame):
-                            dataset["text"] = dataset.apply(lambda x: create_text_from_messages(x)["text"], axis=1)
+                            dataset["text"] = dataset.apply(lambda x: _create_text_from_messages(x)["text"], axis=1)
                         else:
-                            dataset = dataset.map(create_text_from_messages)
+                            dataset = dataset.map(_create_text_from_messages)
                         params.text_column = "text"
                         text_column_created = True
                         logger.info("✓ Fallback text column created from messages")
@@ -311,21 +322,10 @@ def llm_munge_data(params, local):
                 if not text_column_created:
                     logger.warning("No text column found after conversion, creating from messages...")
 
-                    def create_text_from_messages(example):
-                        messages = example.get("messages", [])
-                        if not messages:
-                            return {"text": ""}
-                        text_parts = []
-                        for msg in messages:
-                            role = msg.get("role", "user")
-                            content = msg.get("content", "")
-                            text_parts.append(f"{role}: {content}")
-                        return {"text": "\n".join(text_parts)}
-
                     if isinstance(dataset, pd.DataFrame):
-                        dataset["text"] = dataset.apply(lambda x: create_text_from_messages(x)["text"], axis=1)
+                        dataset["text"] = dataset.apply(lambda x: _create_text_from_messages(x)["text"], axis=1)
                     else:
-                        dataset = dataset.map(create_text_from_messages)
+                        dataset = dataset.map(_create_text_from_messages)
                     params.text_column = "text"
                     logger.info("✓ Text column created from messages as fallback")
 
@@ -398,23 +398,12 @@ def llm_munge_data(params, local):
                                 logger.warning(f"Could not apply chat template to validation: {e}")
 
                                 # Fallback
-                                def create_text_from_messages(example):
-                                    messages = example.get("messages", [])
-                                    if not messages:
-                                        return {"text": ""}
-                                    text_parts = []
-                                    for msg in messages:
-                                        role = msg.get("role", "user")
-                                        content = msg.get("content", "")
-                                        text_parts.append(f"{role}: {content}")
-                                    return {"text": "\n".join(text_parts)}
-
                                 if isinstance(valid_dataset, pd.DataFrame):
                                     valid_dataset["text"] = valid_dataset.apply(
-                                        lambda x: create_text_from_messages(x)["text"], axis=1
+                                        lambda x: _create_text_from_messages(x)["text"], axis=1
                                     )
                                 else:
-                                    valid_dataset = valid_dataset.map(create_text_from_messages)
+                                    valid_dataset = valid_dataset.map(_create_text_from_messages)
 
                         # Convert to DataFrame and save
                         if isinstance(valid_dataset, pd.DataFrame):
@@ -428,19 +417,7 @@ def llm_munge_data(params, local):
 
                         # Ensure text column exists
                         if "text" not in valid_df.columns:
-
-                            def create_text_from_messages(example):
-                                messages = example.get("messages", [])
-                                if not messages:
-                                    return {"text": ""}
-                                text_parts = []
-                                for msg in messages:
-                                    role = msg.get("role", "user")
-                                    content = msg.get("content", "")
-                                    text_parts.append(f"{role}: {content}")
-                                return {"text": "\n".join(text_parts)}
-
-                            valid_df["text"] = valid_df.apply(lambda x: create_text_from_messages(x)["text"], axis=1)
+                            valid_df["text"] = valid_df.apply(lambda x: _create_text_from_messages(x)["text"], axis=1)
 
                         valid_path = os.path.join(project_data_dir, f"{params.valid_split}.jsonl")
                         valid_df.to_json(valid_path, orient="records", lines=True, force_ascii=False)

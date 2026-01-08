@@ -377,9 +377,19 @@ def build_generation_prompt(
     Returns:
         Formatted prompt string
     """
-    # Convert to Conversation if needed
+    # Convert to Conversation if needed, preserving tool_calls
     if isinstance(messages, list):
-        conversation = Conversation(messages=[Message(role=m["role"], content=m["content"]) for m in messages])
+        conversation = Conversation(
+            messages=[
+                Message(
+                    role=m["role"],
+                    content=m.get("content") or "",
+                    tool_calls=m.get("tool_calls"),
+                    tool_call_id=m.get("tool_call_id"),
+                )
+                for m in messages
+            ]
+        )
     else:
         conversation = messages
 
@@ -479,9 +489,19 @@ def build_supervised_example(
     Returns:
         Dictionary with input_ids, attention_mask, labels, and token_weights
     """
-    # Convert to Conversation if needed
+    # Convert to Conversation if needed, preserving tool_calls
     if isinstance(messages, list):
-        conversation = Conversation(messages=[Message(role=m["role"], content=m["content"]) for m in messages])
+        conversation = Conversation(
+            messages=[
+                Message(
+                    role=m["role"],
+                    content=m.get("content") or "",
+                    tool_calls=m.get("tool_calls"),
+                    tool_call_id=m.get("tool_call_id"),
+                )
+                for m in messages
+            ]
+        )
     else:
         conversation = messages
 

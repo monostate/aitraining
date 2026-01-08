@@ -408,6 +408,47 @@ class TokenizerNativeRenderer(MessageRenderer):
     def __init__(self, tokenizer: AutoTokenizer, config: RenderConfig):
         super().__init__(tokenizer, config)
         self._supports_tool_role: Optional[bool] = None  # Cached result
+        self._supports_tool_calls: Optional[bool] = None  # Cached result
+
+    def _check_tool_calls_support(self) -> bool:
+        """Check if the tokenizer's chat template supports the 'tool_calls' field.
+
+        Tests by attempting to render a message with tool_calls and checking
+        if the function name appears in the output.
+
+        Returns:
+            True if tokenizer supports tool_calls field, False otherwise
+        """
+        if self._supports_tool_calls is not None:
+            return self._supports_tool_calls
+
+        # Test with a minimal tool_calls message
+        test_messages = [
+            {"role": "user", "content": "test"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "test_func", "arguments": "{}"},
+                    }
+                ],
+            },
+        ]
+
+        try:
+            result_text = self.tokenizer.apply_chat_template(test_messages, tokenize=False)
+            # Check if the tool call information appears in output
+            if "test_func" in result_text or "call_123" in result_text:
+                self._supports_tool_calls = True
+            else:
+                self._supports_tool_calls = False
+        except Exception:
+            self._supports_tool_calls = False
+
+        return self._supports_tool_calls
 
     def _check_tool_role_support(self) -> bool:
         """Check if the tokenizer's chat template supports the 'tool' role.
@@ -532,8 +573,35 @@ class TokenizerNativeRenderer(MessageRenderer):
 
     def render_conversation(self, conversation: Conversation) -> str:
         """Render conversation using tokenizer's apply_chat_template."""
+        import json
+
+        # Check if any messages have tool_calls
+        has_tool_calls = any(msg.tool_calls for msg in conversation.messages)
+
+        # Only serialize tool_calls if present AND tokenizer doesn't support them natively
+        should_serialize_tool_calls = has_tool_calls and not self._check_tool_calls_support()
+
+        if should_serialize_tool_calls:
+            from autotrain import logger
+
+            logger.debug("Tokenizer doesn't support 'tool_calls' field, serializing to content as JSON")
+
         # Convert to messages format
-        messages = [{"role": msg.role, "content": msg.content} for msg in conversation.messages]
+        messages = []
+        for msg in conversation.messages:
+            content = msg.content or ""
+            # Only serialize tool_calls if tokenizer doesn't support them natively
+            if msg.tool_calls and should_serialize_tool_calls:
+                tool_calls_json = json.dumps(msg.tool_calls, ensure_ascii=False, indent=2)
+                content = (
+                    f"{content}\n\n[Tool Calls]\n{tool_calls_json}" if content else f"[Tool Calls]\n{tool_calls_json}"
+                )
+                messages.append({"role": msg.role, "content": content})
+            elif msg.tool_calls:
+                # Tokenizer supports tool_calls natively - pass them through
+                messages.append({"role": msg.role, "content": content, "tool_calls": msg.tool_calls})
+            else:
+                messages.append({"role": msg.role, "content": content})
 
         # Only preprocess tool messages if tokenizer doesn't support them
         if self._has_tool_messages(messages) and not self._check_tool_role_support():

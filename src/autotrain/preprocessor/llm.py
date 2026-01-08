@@ -581,8 +581,19 @@ def apply_chat_template(
             return {output_column: formatted}
         except Exception as e:
             logger.warning(f"Failed to apply chat template: {e}")
-            # Fallback to simple concatenation
-            text = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
+            # Fallback to simple concatenation (preserving tool_calls, tool role as-is)
+            import json
+
+            parts = []
+            for m in messages:
+                role = m.get("role", "user")
+                content = m.get("content") or ""
+                # Serialize tool_calls to content
+                if m.get("tool_calls"):
+                    tool_json = json.dumps(m["tool_calls"], ensure_ascii=False)
+                    content = f"{content}\n[Tool Calls] {tool_json}" if content else f"[Tool Calls] {tool_json}"
+                parts.append(f"{role}: {content}")
+            text = "\n".join(parts)
             return {output_column: text}
 
     logger.info(f"Applying chat template to {messages_column} column")

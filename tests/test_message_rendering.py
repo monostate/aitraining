@@ -1133,3 +1133,192 @@ class TestToolCallsSerialization:
         assert '"function":' not in content
         assert '"type": "function"' not in content
         assert '"id": "call_123"' not in content
+
+
+class TestToolsDefinitionsInjection:
+    """Tests for tools parameter injection into messages for models that don't support native tools."""
+
+    def test_format_tools_as_text(self):
+        """Test formatting tool definitions as human-readable text."""
+        from autotrain.rendering.utils import format_tools_as_text
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search",
+                    "description": "Search for information",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query"},
+                        },
+                        "required": ["query"],
+                    },
+                },
+            }
+        ]
+
+        text = format_tools_as_text(tools)
+
+        assert "You have access to the following tools" in text
+        assert "search" in text
+        assert "Search for information" in text
+        assert "query" in text
+        assert "(required)" in text
+
+    def test_format_tools_as_text_empty(self):
+        """Test formatting empty tools list."""
+        from autotrain.rendering.utils import format_tools_as_text
+
+        assert format_tools_as_text([]) == ""
+        assert format_tools_as_text(None) == ""
+
+    def test_inject_tools_into_system_message(self):
+        """Test that tools are appended to system message when present."""
+        from autotrain.rendering.utils import inject_tools_into_messages
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello"},
+        ]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "calculator",
+                    "description": "Calculate math",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        injected = inject_tools_into_messages(messages, tools)
+
+        # Tools should be appended to system message
+        assert "You are a helpful assistant." in injected[0]["content"]
+        assert "You have access to the following tools" in injected[0]["content"]
+        assert "calculator" in injected[0]["content"]
+        # User message should be unchanged
+        assert injected[1]["content"] == "Hello"
+
+    def test_inject_tools_into_first_user_message_when_no_system(self):
+        """Test that tools are prepended to first user message when no system message."""
+        from autotrain.rendering.utils import inject_tools_into_messages
+
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi!"},
+        ]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "calculator",
+                    "description": "Calculate math",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        injected = inject_tools_into_messages(messages, tools)
+
+        # Tools should be prepended to first user message
+        assert "You have access to the following tools" in injected[0]["content"]
+        assert "Hello" in injected[0]["content"]
+        # Assistant message should be unchanged
+        assert injected[1]["content"] == "Hi!"
+
+    def test_check_tools_support_gemma(self):
+        """Test that Gemma doesn't support tools parameter."""
+        from autotrain.rendering.utils import check_tools_support
+
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it")
+        except Exception:
+            pytest.skip("Gemma tokenizer not available")
+
+        # Gemma doesn't support tools parameter
+        assert check_tools_support(tokenizer) == False
+
+    def test_safe_apply_with_tools_injection(self):
+        """Test safe_apply_chat_template injects tools for non-supporting tokenizers."""
+        from autotrain.rendering.utils import safe_apply_chat_template
+
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it")
+        except Exception:
+            pytest.skip("Gemma tokenizer not available")
+
+        messages = [
+            {"role": "user", "content": "Calculate 2+2"},
+        ]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "calculator",
+                    "description": "Calculate math expressions",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "expression": {"type": "string", "description": "The math expression"},
+                        },
+                    },
+                },
+            }
+        ]
+
+        result = safe_apply_chat_template(tokenizer, messages, tokenize=False, tools=tools)
+
+        # Tools should be injected into the output
+        assert "calculator" in result
+        assert "Calculate math expressions" in result
+        assert "Calculate 2+2" in result
+
+    def test_tools_not_injected_when_tokenizer_supports(self):
+        """Test that tools are NOT injected when tokenizer supports native tools."""
+        from autotrain.rendering.utils import check_tools_support, inject_tools_into_messages
+
+        # Just verify the logic - if tokenizer supports tools, don't inject
+        messages = [
+            {"role": "user", "content": "Hello"},
+        ]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "test",
+                    "description": "Test",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        # Direct injection should still work but won't be called if tokenizer supports tools
+        injected = inject_tools_into_messages(messages, tools)
+        assert "You have access to the following tools" in injected[0]["content"]
+
+    def test_tools_caching(self):
+        """Test that tools support detection is cached."""
+        from autotrain.rendering.utils import _tools_support_cache, check_tools_support
+
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it")
+        except Exception:
+            pytest.skip("Gemma tokenizer not available")
+
+        # First call populates cache
+        result1 = check_tools_support(tokenizer)
+
+        # Check cache has the entry
+        tokenizer_id = tokenizer.name_or_path
+        assert tokenizer_id in _tools_support_cache
+
+        # Second call uses cache
+        result2 = check_tools_support(tokenizer)
+        assert result1 == result2

@@ -19,6 +19,9 @@ _tool_role_support_cache: Dict[str, bool] = {}
 # Cache for tool_calls field support detection per tokenizer
 _tool_calls_support_cache: Dict[str, bool] = {}
 
+# Cache for tools parameter support detection per tokenizer
+_tools_support_cache: Dict[str, bool] = {}
+
 
 def _get_tokenizer_id(tokenizer: AutoTokenizer) -> str:
     """Get a unique identifier for a tokenizer for caching."""
@@ -108,6 +111,157 @@ def check_tool_calls_support(tokenizer: AutoTokenizer) -> bool:
         result = False
 
     _tool_calls_support_cache[tokenizer_id] = result
+    return result
+
+
+def check_tools_support(tokenizer: AutoTokenizer) -> bool:
+    """Check if a tokenizer's apply_chat_template supports the 'tools' parameter.
+
+    Tests by attempting to call apply_chat_template with a tools parameter
+    and verifying the tool information appears in the output. Some tokenizers
+    (like Gemma) accept the parameter but silently ignore it.
+
+    The result is cached per tokenizer for performance.
+
+    Args:
+        tokenizer: The tokenizer to check
+
+    Returns:
+        True if tokenizer supports and uses tools parameter, False otherwise
+    """
+    tokenizer_id = _get_tokenizer_id(tokenizer)
+
+    if tokenizer_id in _tools_support_cache:
+        return _tools_support_cache[tokenizer_id]
+
+    # Test with a minimal tools definition
+    test_messages = [{"role": "user", "content": "test"}]
+    test_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "unique_test_tool_xyz123",
+                "description": "A test tool for checking support",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
+
+    try:
+        output = tokenizer.apply_chat_template(test_messages, tools=test_tools, tokenize=False)
+        # Check if the tool information actually appears in the output
+        # Some tokenizers accept the parameter but silently ignore it (e.g., Gemma)
+        if "unique_test_tool_xyz123" in output or "test_tool" in output:
+            result = True
+        else:
+            # Tokenizer accepted the parameter but didn't use it
+            result = False
+    except (TypeError, Exception):
+        # TypeError if tools parameter not accepted, other exceptions for other failures
+        result = False
+
+    _tools_support_cache[tokenizer_id] = result
+    return result
+
+
+def format_tools_as_text(tools: List[Dict]) -> str:
+    """Format tool definitions as text for injection into system prompt.
+
+    Converts OpenAI-style tool definitions to a readable text format that can
+    be included in the system prompt for models that don't support native tools.
+
+    Args:
+        tools: List of tool definitions in OpenAI format
+
+    Returns:
+        Formatted string describing available tools
+    """
+    import json
+
+    if not tools:
+        return ""
+
+    tool_descriptions = []
+    for tool in tools:
+        if isinstance(tool, dict):
+            # Handle OpenAI format: {"type": "function", "function": {...}}
+            if "function" in tool:
+                func = tool["function"]
+                name = func.get("name", "unknown")
+                desc = func.get("description", "No description")
+                params = func.get("parameters", {})
+
+                # Format parameters
+                props = params.get("properties", {}) or {}
+                required = params.get("required", []) or []
+
+                param_strs = []
+                for param_name, param_info in props.items():
+                    # Skip None values (some datasets have None for unused params)
+                    if param_info is None:
+                        continue
+                    param_type = param_info.get("type", "any") if isinstance(param_info, dict) else "any"
+                    param_desc = param_info.get("description", "") if isinstance(param_info, dict) else ""
+                    req_marker = " (required)" if param_name in required else ""
+                    param_strs.append(f"    - {param_name}: {param_type}{req_marker} - {param_desc}")
+
+                params_text = "\n".join(param_strs) if param_strs else "    (no parameters)"
+
+                tool_descriptions.append(f"- {name}: {desc}\n  Parameters:\n{params_text}")
+            else:
+                # Simple format: just the dict
+                tool_descriptions.append(f"- {json.dumps(tool, ensure_ascii=False)}")
+
+    header = "You have access to the following tools:\n\n"
+    footer = '\n\nTo use a tool, respond with a tool call in this format: [Tool Call] {"tool": "tool_name", "arguments": {...}}'
+
+    return header + "\n\n".join(tool_descriptions) + footer
+
+
+def inject_tools_into_messages(
+    messages: List[Dict[str, Any]],
+    tools: List[Dict],
+) -> List[Dict[str, Any]]:
+    """Inject tool definitions into messages for models that don't support native tools.
+
+    This function:
+    1. Formats tool definitions as human-readable text
+    2. Injects them into the system message (appended) or first user message (prepended)
+
+    Args:
+        messages: List of message dicts with 'role' and 'content' keys
+        tools: List of tool definitions in OpenAI format
+
+    Returns:
+        Messages with tool definitions injected
+    """
+    if not tools:
+        return messages
+
+    tools_text = format_tools_as_text(tools)
+    if not tools_text:
+        return messages
+
+    # Make a copy to avoid mutating the original
+    result = []
+    tools_injected = False
+
+    for msg in messages:
+        msg_copy = msg.copy()
+        content = msg_copy.get("content", "") or ""
+
+        if not tools_injected:
+            if msg_copy.get("role") == "system":
+                # Append tools to system message
+                msg_copy["content"] = f"{content}\n\n{tools_text}" if content else tools_text
+                tools_injected = True
+            elif msg_copy.get("role") == "user":
+                # No system message found, prepend tools to first user message
+                msg_copy["content"] = f"{tools_text}\n\n{content}" if content else tools_text
+                tools_injected = True
+
+        result.append(msg_copy)
+
     return result
 
 
@@ -272,23 +426,28 @@ def safe_apply_chat_template(
     messages: List[Dict[str, Any]],
     tokenize: bool = False,
     add_generation_prompt: bool = False,
+    tools: Optional[List[Dict]] = None,
     **kwargs,
 ) -> str:
     """Safely apply chat template with automatic tool handling and alternation fixing.
 
     This function automatically:
-    1. Detects if the tokenizer supports the 'tool_calls' field and serializes if needed
-    2. Detects if the tokenizer supports the 'tool' role and converts if needed
-    3. Fixes alternation issues (consecutive same-role, missing user before assistant)
+    1. Detects if the tokenizer supports the 'tools' parameter and injects into messages if needed
+    2. Detects if the tokenizer supports the 'tool_calls' field and serializes if needed
+    3. Detects if the tokenizer supports the 'tool' role and converts if needed
+    4. Fixes alternation issues (consecutive same-role, missing user before assistant)
 
     Use this instead of directly calling tokenizer.apply_chat_template() when
-    messages may have tool_calls, tool role, or alternation issues.
+    messages may have tool_calls, tool role, tools definitions, or alternation issues.
 
     Args:
         tokenizer: The tokenizer to use
         messages: List of message dicts with 'role', 'content', and optionally 'tool_calls' keys
         tokenize: Whether to return token IDs (default False for string output)
         add_generation_prompt: Whether to add generation prompt
+        tools: Optional list of tool definitions in OpenAI format. If provided and the tokenizer
+               doesn't support native tools, they will be injected into the system prompt or
+               first user message.
         **kwargs: Additional arguments passed to apply_chat_template
 
     Returns:
@@ -305,6 +464,16 @@ def safe_apply_chat_template(
         >>> # For Llama 3.1+ (has tool support): uses native format
         >>> result = safe_apply_chat_template(tokenizer, messages)
     """
+    # Check if tokenizer supports native tools parameter
+    tokenizer_supports_tools = check_tools_support(tokenizer) if tools and len(tools) > 0 else False
+
+    # If tokenizer doesn't support native tools, inject them into messages
+    if tools and len(tools) > 0 and not tokenizer_supports_tools:
+        from autotrain import logger
+
+        logger.debug("Tokenizer doesn't support 'tools' parameter, injecting into system prompt")
+        messages = inject_tools_into_messages(messages, tools)
+
     # Check if messages have tool_calls field
     has_tool_calls = any(msg.get("tool_calls") for msg in messages)
 
@@ -325,14 +494,20 @@ def safe_apply_chat_template(
         logger.debug("Tokenizer doesn't support 'tool' role, converting to 'user' with [Tool Result] prefix")
         messages = preprocess_messages_for_tool_role(messages)
 
+    # Build kwargs for apply_chat_template
+    template_kwargs = {
+        "tokenize": tokenize,
+        "add_generation_prompt": add_generation_prompt,
+        **kwargs,
+    }
+
+    # Pass tools to native template if tokenizer supports it
+    if tokenizer_supports_tools and tools:
+        template_kwargs["tools"] = tools
+
     # Try to apply template
     try:
-        return tokenizer.apply_chat_template(
-            messages,
-            tokenize=tokenize,
-            add_generation_prompt=add_generation_prompt,
-            **kwargs,
-        )
+        return tokenizer.apply_chat_template(messages, **template_kwargs)
     except Exception as e:
         error_str = str(e).lower()
 
@@ -344,12 +519,7 @@ def safe_apply_chat_template(
             messages = fix_message_alternation(messages)
 
             try:
-                return tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=tokenize,
-                    add_generation_prompt=add_generation_prompt,
-                    **kwargs,
-                )
+                return tokenizer.apply_chat_template(messages, **template_kwargs)
             except Exception as e2:
                 from autotrain import logger
 

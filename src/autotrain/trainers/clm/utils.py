@@ -606,9 +606,12 @@ def apply_chat_template_unified(
         # Convert to Conversation object (preserving tool_calls if present)
         conversation = Conversation(messages=[_message_from_dict(m, Message) for m in messages])
 
+        # Extract tools from example if present (for tool definitions injection)
+        tools = example.get("tools", None)
+
         # Render conversation to 'text' column (preserve original messages)
         # Strip BOS token to prevent double BOS when tokenizer adds it during training
-        rendered = renderer.render_conversation(conversation)
+        rendered = renderer.render_conversation(conversation, tools=tools)
         example["text"] = strip_bos_token(rendered, renderer.tokenizer)
 
     elif config.trainer == "reward":
@@ -632,14 +635,21 @@ def apply_chat_template_unified(
                     # It's a plain string response - convert to conversation format
                     rejected_messages = [{"role": "assistant", "content": rejected_messages}]
 
+            # Extract tools from example if present (for tool definitions injection)
+            tools = example.get("tools", None)
+
             # Convert and render chosen (preserving tool_calls if present)
             # Strip BOS to prevent double BOS when tokenizer adds it during training
             chosen_conv = Conversation(messages=[_message_from_dict(m, Message) for m in chosen_messages])
-            example["chosen"] = strip_bos_token(renderer.render_conversation(chosen_conv), renderer.tokenizer)
+            example["chosen"] = strip_bos_token(
+                renderer.render_conversation(chosen_conv, tools=tools), renderer.tokenizer
+            )
 
             # Convert and render rejected (preserving tool_calls if present)
             rejected_conv = Conversation(messages=[_message_from_dict(m, Message) for m in rejected_messages])
-            example["rejected"] = strip_bos_token(renderer.render_conversation(rejected_conv), renderer.tokenizer)
+            example["rejected"] = strip_bos_token(
+                renderer.render_conversation(rejected_conv, tools=tools), renderer.tokenizer
+            )
         else:
             raise ValueError(
                 f"Could not format example as dialogue for `rm/orpo` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"
@@ -674,19 +684,28 @@ def apply_chat_template_unified(
                         {"role": "assistant", "content": rejected_messages},
                     ]
 
+            # Extract tools from example if present (for tool definitions injection)
+            tools = example.get("tools", None)
+
             # Extract prompt (all messages except last, preserving tool_calls if present)
             # Strip BOS to prevent double BOS when tokenizer adds it during training
             prompt_messages = chosen_messages[:-1]
             prompt_conv = Conversation(messages=[_message_from_dict(m, Message) for m in prompt_messages])
-            example["prompt"] = strip_bos_token(renderer.render_conversation(prompt_conv), renderer.tokenizer)
+            example["prompt"] = strip_bos_token(
+                renderer.render_conversation(prompt_conv, tools=tools), renderer.tokenizer
+            )
 
             # Render full chosen (preserving tool_calls if present)
             chosen_conv = Conversation(messages=[_message_from_dict(m, Message) for m in chosen_messages])
-            example["chosen"] = strip_bos_token(renderer.render_conversation(chosen_conv), renderer.tokenizer)
+            example["chosen"] = strip_bos_token(
+                renderer.render_conversation(chosen_conv, tools=tools), renderer.tokenizer
+            )
 
             # Render full rejected (preserving tool_calls if present)
             rejected_conv = Conversation(messages=[_message_from_dict(m, Message) for m in rejected_messages])
-            example["rejected"] = strip_bos_token(renderer.render_conversation(rejected_conv), renderer.tokenizer)
+            example["rejected"] = strip_bos_token(
+                renderer.render_conversation(rejected_conv, tools=tools), renderer.tokenizer
+            )
         else:
             raise ValueError(
                 f"Could not format example as dialogue for `{config.trainer}` task! Require `[chosen, rejected]` keys but found {list(example.keys())}"

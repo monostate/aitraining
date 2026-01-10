@@ -409,6 +409,7 @@ class TokenizerNativeRenderer(MessageRenderer):
         super().__init__(tokenizer, config)
         self._supports_tool_role: Optional[bool] = None  # Cached result
         self._supports_tool_calls: Optional[bool] = None  # Cached result
+        self._supports_tools: Optional[bool] = None  # Cached result for tools parameter
 
     def _check_tool_calls_support(self) -> bool:
         """Check if the tokenizer's chat template supports the 'tool_calls' field.
@@ -477,6 +478,102 @@ class TokenizerNativeRenderer(MessageRenderer):
             self._supports_tool_role = False
 
         return self._supports_tool_role
+
+    def _check_tools_support(self) -> bool:
+        """Check if the tokenizer's apply_chat_template supports the 'tools' parameter.
+
+        Tests by attempting to call apply_chat_template with a tools parameter
+        and verifying the tool information appears in the output. Some tokenizers
+        (like Gemma) accept the parameter but silently ignore it.
+
+        The result is cached for performance.
+
+        Returns:
+            True if tokenizer supports and uses tools parameter, False otherwise
+        """
+        if self._supports_tools is not None:
+            return self._supports_tools
+
+        # Test with a minimal tools definition
+        test_messages = [{"role": "user", "content": "test"}]
+        test_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "unique_test_tool_xyz123",
+                    "description": "A test tool for checking support",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        try:
+            output = self.tokenizer.apply_chat_template(test_messages, tools=test_tools, tokenize=False)
+            # Check if the tool information actually appears in the output
+            # Some tokenizers accept the parameter but silently ignore it (e.g., Gemma)
+            if "unique_test_tool_xyz123" in output or "test_tool" in output:
+                self._supports_tools = True
+            else:
+                # Tokenizer accepted the parameter but didn't use it
+                self._supports_tools = False
+        except (TypeError, Exception):
+            # TypeError if tools parameter not accepted, other exceptions for other failures
+            self._supports_tools = False
+
+        return self._supports_tools
+
+    def _format_tools_as_text(self, tools: List[Dict]) -> str:
+        """Format tool definitions as text for injection into system prompt.
+
+        Converts OpenAI-style tool definitions to a readable text format that can
+        be included in the system prompt for models that don't support native tools.
+
+        Args:
+            tools: List of tool definitions in OpenAI format
+
+        Returns:
+            Formatted string describing available tools
+        """
+        import json
+
+        if not tools:
+            return ""
+
+        tool_descriptions = []
+        for tool in tools:
+            if isinstance(tool, dict):
+                # Handle OpenAI format: {"type": "function", "function": {...}}
+                if "function" in tool:
+                    func = tool["function"]
+                    name = func.get("name", "unknown")
+                    desc = func.get("description", "No description")
+                    params = func.get("parameters", {})
+
+                    # Format parameters
+                    props = params.get("properties", {}) or {}
+                    required = params.get("required", []) or []
+
+                    param_strs = []
+                    for param_name, param_info in props.items():
+                        # Skip None values (some datasets have None for unused params)
+                        if param_info is None:
+                            continue
+                        param_type = param_info.get("type", "any") if isinstance(param_info, dict) else "any"
+                        param_desc = param_info.get("description", "") if isinstance(param_info, dict) else ""
+                        req_marker = " (required)" if param_name in required else ""
+                        param_strs.append(f"    - {param_name}: {param_type}{req_marker} - {param_desc}")
+
+                    params_text = "\n".join(param_strs) if param_strs else "    (no parameters)"
+
+                    tool_descriptions.append(f"- {name}: {desc}\n  Parameters:\n{params_text}")
+                else:
+                    # Simple format: just the dict
+                    tool_descriptions.append(f"- {json.dumps(tool, ensure_ascii=False)}")
+
+        header = "You have access to the following tools:\n\n"
+        footer = '\n\nTo use a tool, respond with a tool call in this format: [Tool Call] {"tool": "tool_name", "arguments": {...}}'
+
+        return header + "\n\n".join(tool_descriptions) + footer
 
     def _preprocess_messages_for_alternation(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Preprocess messages to handle roles not supported by strict-alternation tokenizers.
@@ -571,8 +668,15 @@ class TokenizerNativeRenderer(MessageRenderer):
 
         return result
 
-    def render_conversation(self, conversation: Conversation) -> str:
-        """Render conversation using tokenizer's apply_chat_template."""
+    def render_conversation(self, conversation: Conversation, tools: Optional[List[Dict]] = None) -> str:
+        """Render conversation using tokenizer's apply_chat_template.
+
+        Args:
+            conversation: The conversation to render
+            tools: Optional list of tool definitions. If provided and the tokenizer
+                   doesn't support native tools, they will be injected into the
+                   system prompt or first user message.
+        """
         import json
 
         # Check if any messages have tool_calls
@@ -586,10 +690,36 @@ class TokenizerNativeRenderer(MessageRenderer):
 
             logger.debug("Tokenizer doesn't support 'tool_calls' field, serializing to content as JSON")
 
+        # Check if we need to inject tools into the conversation
+        should_inject_tools = tools and len(tools) > 0 and not self._check_tools_support()
+
+        if should_inject_tools:
+            from autotrain import logger
+
+            logger.debug("Tokenizer doesn't support 'tools' parameter, injecting into system prompt")
+
+        # If we need to inject tools, format them as text first
+        tools_text = ""
+        if should_inject_tools:
+            tools_text = self._format_tools_as_text(tools)
+
         # Convert to messages format
         messages = []
+        tools_injected = False
         for msg in conversation.messages:
             content = msg.content or ""
+
+            # Inject tools into system message or first user message if needed
+            if should_inject_tools and tools_text and not tools_injected:
+                if msg.role == "system":
+                    # Append tools to system message
+                    content = f"{content}\n\n{tools_text}" if content else tools_text
+                    tools_injected = True
+                elif msg.role == "user":
+                    # No system message found, prepend tools to first user message
+                    content = f"{tools_text}\n\n{content}" if content else tools_text
+                    tools_injected = True
+
             # Only serialize tool_calls if tokenizer doesn't support them natively
             if msg.tool_calls and should_serialize_tool_calls:
                 # Transform tool_calls to clean format (not raw OpenAI format with "function" key)
@@ -618,11 +748,20 @@ class TokenizerNativeRenderer(MessageRenderer):
             logger.debug("Tokenizer doesn't support 'tool' role, converting to 'user' with [Tool Result] prefix")
             messages = self._preprocess_messages_for_alternation(messages)
 
+        # Build kwargs for apply_chat_template
+        template_kwargs = {
+            "tokenize": False,
+            "add_generation_prompt": self.config.add_generation_prompt,
+        }
+
+        # Pass tools to native template if tokenizer supports it
+        # (only if tools weren't injected into messages, meaning tokenizer supports native tools)
+        if tools and not tools_injected and self._check_tools_support():
+            template_kwargs["tools"] = tools
+
         # Try to apply template
         try:
-            rendered = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=self.config.add_generation_prompt
-            )
+            rendered = self.tokenizer.apply_chat_template(messages, **template_kwargs)
             return rendered
         except Exception as e:
             error_str = str(e).lower()
@@ -635,9 +774,7 @@ class TokenizerNativeRenderer(MessageRenderer):
                 messages = self._fix_alternation(messages)
 
                 try:
-                    rendered = self.tokenizer.apply_chat_template(
-                        messages, tokenize=False, add_generation_prompt=self.config.add_generation_prompt
-                    )
+                    rendered = self.tokenizer.apply_chat_template(messages, **template_kwargs)
                     return rendered
                 except Exception as e2:
                     logger.warning(f"Failed to apply chat template even after fixing alternation: {e2}")

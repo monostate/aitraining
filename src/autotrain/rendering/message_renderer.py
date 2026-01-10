@@ -571,9 +571,7 @@ class TokenizerNativeRenderer(MessageRenderer):
                     tool_descriptions.append(f"- {json.dumps(tool, ensure_ascii=False)}")
 
         header = "You have access to the following tools:\n\n"
-        footer = '\n\nTo use a tool, respond with a tool call in this format: [Tool Call] {"tool": "tool_name", "arguments": {...}}'
-
-        return header + "\n\n".join(tool_descriptions) + footer
+        return header + "\n\n".join(tool_descriptions)
 
     def _preprocess_messages_for_alternation(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Preprocess messages to handle roles not supported by strict-alternation tokenizers.
@@ -733,7 +731,7 @@ class TokenizerNativeRenderer(MessageRenderer):
                         except json.JSONDecodeError:
                             pass
                     tool_json = json.dumps({"tool": tool_name, "arguments": args}, ensure_ascii=False)
-                    content = f"{content}\n[Tool Call] {tool_json}" if content else f"[Tool Call] {tool_json}"
+                    content = f"{content}\n{tool_json}" if content else tool_json
                 messages.append({"role": msg.role, "content": content})
             elif msg.tool_calls:
                 # Tokenizer supports tool_calls natively - pass them through

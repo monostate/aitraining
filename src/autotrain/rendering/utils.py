@@ -213,9 +213,7 @@ def format_tools_as_text(tools: List[Dict]) -> str:
                 tool_descriptions.append(f"- {json.dumps(tool, ensure_ascii=False)}")
 
     header = "You have access to the following tools:\n\n"
-    footer = '\n\nTo use a tool, respond with a tool call in this format: [Tool Call] {"tool": "tool_name", "arguments": {...}}'
-
-    return header + "\n\n".join(tool_descriptions) + footer
+    return header + "\n\n".join(tool_descriptions)
 
 
 def inject_tools_into_messages(
@@ -290,7 +288,7 @@ def serialize_tool_calls_to_content(messages: List[Dict[str, Any]]) -> List[Dict
         Output:
         {
             "role": "assistant",
-            "content": "Let me check that for you.\n[Tool Call] {\"tool\": \"search\", \"arguments\": {\"query\": \"weather\"}}"
+            "content": "Let me check that for you.\n{\"tool\": \"search\", \"arguments\": {\"query\": \"weather\"}}"
         }
     """
     import json
@@ -317,7 +315,7 @@ def serialize_tool_calls_to_content(messages: List[Dict[str, Any]]) -> List[Dict
                         pass  # Keep as string if can't parse
 
                 tool_json = json.dumps({"tool": tool_name, "arguments": args}, ensure_ascii=False)
-                content = f"{content}\n[Tool Call] {tool_json}" if content else f"[Tool Call] {tool_json}"
+                content = f"{content}\n{tool_json}" if content else tool_json
 
             msg_copy["content"] = content.strip()
 

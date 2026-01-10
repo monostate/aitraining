@@ -880,7 +880,7 @@ class TestToolCallsSerialization:
         # Assistant message should have tool call serialized into content
         assert len(serialized) == 4
         assert serialized[1]["role"] == "assistant"
-        assert "[Tool Call]" in serialized[1]["content"]
+        assert '"tool": "get_weather"' in serialized[1]["content"] or '"tool":"get_weather"' in serialized[1]["content"]
         assert "get_weather" in serialized[1]["content"]
         assert "Paris" in serialized[1]["content"]
         # tool_calls field should be removed
@@ -906,9 +906,8 @@ class TestToolCallsSerialization:
 
         # Original content should be preserved
         assert "I'll search for that." in serialized[0]["content"]
-        # Tool call should be appended
-        assert "[Tool Call]" in serialized[0]["content"]
-        assert "search" in serialized[0]["content"]
+        # Tool call should be appended as JSON
+        assert '"tool": "search"' in serialized[0]["content"] or '"tool":"search"' in serialized[0]["content"]
 
     def test_serialize_tool_calls_handles_none_content(self):
         """Test serialization when content is None (common in OpenAI responses)."""
@@ -928,8 +927,7 @@ class TestToolCallsSerialization:
 
         # Should handle None content gracefully
         assert serialized[0]["content"] is not None
-        assert "[Tool Call]" in serialized[0]["content"]
-        assert "calculator" in serialized[0]["content"]
+        assert '"tool": "calculator"' in serialized[0]["content"] or '"tool":"calculator"' in serialized[0]["content"]
 
     def test_serialize_multiple_tool_calls(self):
         """Test serialization of multiple tool calls in one message."""
@@ -948,11 +946,11 @@ class TestToolCallsSerialization:
 
         serialized = serialize_tool_calls_to_content(messages)
 
-        # Both tool calls should be serialized
+        # Both tool calls should be serialized as JSON
         content = serialized[0]["content"]
         assert "get_weather" in content
         assert "get_time" in content
-        assert content.count("[Tool Call]") == 2
+        assert content.count('"tool":') == 2 or content.count('"tool": ') == 2
 
     def test_serialize_preserves_non_tool_messages(self):
         """Test that messages without tool_calls are unchanged."""
@@ -1035,9 +1033,8 @@ class TestToolCallsSerialization:
 
         result = safe_apply_chat_template(tokenizer, messages, tokenize=False)
 
-        # Tool call should be serialized to content
-        assert "[Tool Call]" in result
-        assert "calculator" in result
+        # Tool call should be serialized to content as JSON
+        assert '"tool": "calculator"' in result or '"tool":"calculator"' in result
         # Tool result should be converted
         assert "[Tool Result]" in result
 

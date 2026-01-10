@@ -877,13 +877,15 @@ class TestToolCallsSerialization:
 
         serialized = serialize_tool_calls_to_content(messages)
 
-        # Assistant message should have tool call serialized into content
+        # Assistant message should have tool call serialized into content in OpenAI format
         assert len(serialized) == 4
         assert serialized[1]["role"] == "assistant"
-        assert '"tool": "get_weather"' in serialized[1]["content"] or '"tool":"get_weather"' in serialized[1]["content"]
-        assert "get_weather" in serialized[1]["content"]
+        # Should be OpenAI format: {"content": "...", "tool_calls": [...]}
+        assert '"tool_calls":' in serialized[1]["content"] or '"tool_calls": ' in serialized[1]["content"]
+        assert '"function":' in serialized[1]["content"] or '"function": ' in serialized[1]["content"]
+        assert '"name": "get_weather"' in serialized[1]["content"] or '"name":"get_weather"' in serialized[1]["content"]
         assert "Paris" in serialized[1]["content"]
-        # tool_calls field should be removed
+        # tool_calls field should be removed from the message dict
         assert "tool_calls" not in serialized[1]
         # tool_call_id should be removed
         assert "tool_call_id" not in serialized[2]
@@ -904,10 +906,11 @@ class TestToolCallsSerialization:
 
         serialized = serialize_tool_calls_to_content(messages)
 
-        # Original content should be preserved
+        # Original content should be preserved (both in message and in JSON content field)
         assert "I'll search for that." in serialized[0]["content"]
-        # Tool call should be appended as JSON
-        assert '"tool": "search"' in serialized[0]["content"] or '"tool":"search"' in serialized[0]["content"]
+        # Tool call should be appended as OpenAI format JSON
+        assert '"name": "search"' in serialized[0]["content"] or '"name":"search"' in serialized[0]["content"]
+        assert '"tool_calls":' in serialized[0]["content"] or '"tool_calls": ' in serialized[0]["content"]
 
     def test_serialize_tool_calls_handles_none_content(self):
         """Test serialization when content is None (common in OpenAI responses)."""
@@ -925,9 +928,10 @@ class TestToolCallsSerialization:
 
         serialized = serialize_tool_calls_to_content(messages)
 
-        # Should handle None content gracefully
+        # Should handle None content gracefully - outputs OpenAI format with "content": null
         assert serialized[0]["content"] is not None
-        assert '"tool": "calculator"' in serialized[0]["content"] or '"tool":"calculator"' in serialized[0]["content"]
+        assert '"content": null' in serialized[0]["content"] or '"content":null' in serialized[0]["content"]
+        assert '"name": "calculator"' in serialized[0]["content"] or '"name":"calculator"' in serialized[0]["content"]
 
     def test_serialize_multiple_tool_calls(self):
         """Test serialization of multiple tool calls in one message."""
@@ -946,11 +950,13 @@ class TestToolCallsSerialization:
 
         serialized = serialize_tool_calls_to_content(messages)
 
-        # Both tool calls should be serialized as JSON
+        # Both tool calls should be serialized in OpenAI format (single JSON with tool_calls array)
         content = serialized[0]["content"]
         assert "get_weather" in content
         assert "get_time" in content
-        assert content.count('"tool":') == 2 or content.count('"tool": ') == 2
+        # Should have one tool_calls array with 2 entries
+        assert '"tool_calls":' in content or '"tool_calls": ' in content
+        assert content.count('"name":') == 2 or content.count('"name": ') == 2
 
     def test_serialize_preserves_non_tool_messages(self):
         """Test that messages without tool_calls are unchanged."""
@@ -1033,8 +1039,9 @@ class TestToolCallsSerialization:
 
         result = safe_apply_chat_template(tokenizer, messages, tokenize=False)
 
-        # Tool call should be serialized to content as JSON
-        assert '"tool": "calculator"' in result or '"tool":"calculator"' in result
+        # Tool call should be serialized to content in OpenAI format
+        assert '"name": "calculator"' in result or '"name":"calculator"' in result
+        assert '"tool_calls":' in result or '"tool_calls": ' in result
         # Tool result should be converted
         assert "[Tool Result]" in result
 
@@ -1103,8 +1110,8 @@ class TestToolCallsSerialization:
         assert "[Tool Result]" in processed[2]["content"]
         assert "4" in processed[2]["content"]
 
-    def test_serialize_tool_calls_clean_format_not_function(self):
-        """Test that tool_calls serialization produces clean format, not raw OpenAI format with 'function' key."""
+    def test_serialize_tool_calls_openai_format(self):
+        """Test that tool_calls serialization produces OpenAI format to match system prompt instructions."""
         from autotrain.rendering.utils import serialize_tool_calls_to_content
 
         messages = [
@@ -1124,12 +1131,13 @@ class TestToolCallsSerialization:
         serialized = serialize_tool_calls_to_content(messages)
         content = serialized[0]["content"]
 
-        # Should produce clean format: {"tool": "search", "arguments": {...}}
-        assert '"tool": "search"' in content or '"tool":"search"' in content
-        # Should NOT contain raw OpenAI format with "function" key
-        assert '"function":' not in content
-        assert '"type": "function"' not in content
-        assert '"id": "call_123"' not in content
+        # Should produce OpenAI format: {"content": "...", "tool_calls": [{...}]}
+        assert '"tool_calls":' in content or '"tool_calls": ' in content
+        assert '"function":' in content or '"function": ' in content
+        assert '"name": "search"' in content or '"name":"search"' in content
+        # Should contain id and type
+        assert '"id":' in content or '"id": ' in content
+        assert '"type":' in content or '"type": ' in content
 
 
 class TestToolsDefinitionsInjection:

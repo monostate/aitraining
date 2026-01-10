@@ -268,27 +268,27 @@ def serialize_tool_calls_to_content(messages: List[Dict[str, Any]]) -> List[Dict
 
     This function:
     1. Finds assistant messages with tool_calls field
-    2. Appends the tool calls as JSON to the message content
+    2. Serializes as OpenAI format JSON: {"content": "...", "tool_calls": [...]}
     3. Returns messages without the tool_calls field (content contains the JSON)
 
     Args:
         messages: List of message dicts, potentially with tool_calls
 
     Returns:
-        Messages with tool_calls serialized into content
+        Messages with tool_calls serialized into content in OpenAI format
 
     Example:
         Input:
         {
             "role": "assistant",
             "content": "Let me check that for you.",
-            "tool_calls": [{"function": {"name": "search", "arguments": "{\"query\": \"weather\"}"}}]
+            "tool_calls": [{"id": "call_123", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"weather\"}"}}]
         }
 
         Output:
         {
             "role": "assistant",
-            "content": "Let me check that for you.\n{\"tool\": \"search\", \"arguments\": {\"query\": \"weather\"}}"
+            "content": "Let me check that for you.\n{\"content\": \"Let me check that for you.\", \"tool_calls\": [{\"id\": \"call_123\", \"type\": \"function\", \"function\": {\"name\": \"search\", \"arguments\": \"{\\\"query\\\": \\\"weather\\\"}\"}}]}"
         }
     """
     import json
@@ -299,25 +299,42 @@ def serialize_tool_calls_to_content(messages: List[Dict[str, Any]]) -> List[Dict
         tool_calls = msg_copy.pop("tool_calls", None)
 
         if tool_calls and msg_copy.get("role") == "assistant":
-            content = msg_copy.get("content") or ""
+            original_content = msg_copy.get("content") or ""
 
-            # Serialize each tool call
+            # Build OpenAI format tool_calls array
+            formatted_tool_calls = []
             for tc in tool_calls:
                 func = tc.get("function", {})
                 tool_name = func.get("name", "unknown")
 
-                # Parse arguments if they're a string
+                # Keep arguments as string (OpenAI format expects stringified JSON)
                 args = func.get("arguments", "{}")
-                if isinstance(args, str):
-                    try:
-                        args = json.loads(args)
-                    except json.JSONDecodeError:
-                        pass  # Keep as string if can't parse
+                if not isinstance(args, str):
+                    args = json.dumps(args, ensure_ascii=False)
 
-                tool_json = json.dumps({"tool": tool_name, "arguments": args}, ensure_ascii=False)
-                content = f"{content}\n{tool_json}" if content else tool_json
+                formatted_tc = {
+                    "id": tc.get("id", "call_001"),
+                    "type": tc.get("type", "function"),
+                    "function": {
+                        "name": tool_name,
+                        "arguments": args
+                    }
+                }
+                formatted_tool_calls.append(formatted_tc)
 
-            msg_copy["content"] = content.strip()
+            # Build the full OpenAI format JSON object
+            openai_format = {
+                "content": original_content if original_content else None,
+                "tool_calls": formatted_tool_calls
+            }
+
+            tool_json = json.dumps(openai_format, ensure_ascii=False)
+
+            # If there was original content, prepend it before the JSON
+            if original_content:
+                msg_copy["content"] = f"{original_content}\n{tool_json}"
+            else:
+                msg_copy["content"] = tool_json
 
         # Remove tool_call_id from tool response messages (handled separately by tool role conversion)
         msg_copy.pop("tool_call_id", None)

@@ -315,17 +315,14 @@ def serialize_tool_calls_to_content(messages: List[Dict[str, Any]]) -> List[Dict
                 formatted_tc = {
                     "id": tc.get("id", "call_001"),
                     "type": tc.get("type", "function"),
-                    "function": {
-                        "name": tool_name,
-                        "arguments": args
-                    }
+                    "function": {"name": tool_name, "arguments": args},
                 }
                 formatted_tool_calls.append(formatted_tc)
 
             # Build the full OpenAI format JSON object
             openai_format = {
                 "content": original_content if original_content else None,
-                "tool_calls": formatted_tool_calls
+                "tool_calls": formatted_tool_calls,
             }
 
             tool_json = json.dumps(openai_format, ensure_ascii=False)

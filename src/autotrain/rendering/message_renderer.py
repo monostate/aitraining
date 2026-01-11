@@ -720,18 +720,26 @@ class TokenizerNativeRenderer(MessageRenderer):
 
             # Only serialize tool_calls if tokenizer doesn't support them natively
             if msg.tool_calls and should_serialize_tool_calls:
-                # Transform tool_calls to clean format (not raw OpenAI format with "function" key)
+                # Build OpenAI format tool_calls array
+                formatted_tool_calls = []
                 for tc in msg.tool_calls:
                     func = tc.get("function", {})
                     tool_name = func.get("name", "unknown")
                     args = func.get("arguments", "{}")
-                    if isinstance(args, str):
-                        try:
-                            args = json.loads(args)
-                        except json.JSONDecodeError:
-                            pass
-                    tool_json = json.dumps({"tool": tool_name, "arguments": args}, ensure_ascii=False)
-                    content = f"{content}\n{tool_json}" if content else tool_json
+                    # Keep arguments as string (OpenAI format expects stringified JSON)
+                    if not isinstance(args, str):
+                        args = json.dumps(args, ensure_ascii=False)
+                    formatted_tool_calls.append(
+                        {
+                            "id": tc.get("id", f"call_{len(formatted_tool_calls)}"),
+                            "type": tc.get("type", "function"),
+                            "function": {"name": tool_name, "arguments": args},
+                        }
+                    )
+
+                # Build single JSON with content and all tool_calls (OpenAI format)
+                output_obj = {"content": content if content else None, "tool_calls": formatted_tool_calls}
+                content = json.dumps(output_obj, ensure_ascii=False)
                 messages.append({"role": msg.role, "content": content})
             elif msg.tool_calls:
                 # Tokenizer supports tool_calls natively - pass them through

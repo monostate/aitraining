@@ -288,7 +288,7 @@ def serialize_tool_calls_to_content(messages: List[Dict[str, Any]]) -> List[Dict
         Output:
         {
             "role": "assistant",
-            "content": "Let me check that for you.\n{\"content\": \"Let me check that for you.\", \"tool_calls\": [{\"id\": \"call_123\", \"type\": \"function\", \"function\": {\"name\": \"search\", \"arguments\": \"{\\\"query\\\": \\\"weather\\\"}\"}}]}"
+            "content": "{\"content\": \"Let me check that for you.\", \"tool_calls\": [{\"id\": \"call_123\", \"type\": \"function\", \"function\": {\"name\": \"search\", \"arguments\": \"{\\\"query\\\": \\\"weather\\\"}\"}}]}"
         }
     """
     import json
@@ -327,11 +327,9 @@ def serialize_tool_calls_to_content(messages: List[Dict[str, Any]]) -> List[Dict
 
             tool_json = json.dumps(openai_format, ensure_ascii=False)
 
-            # If there was original content, prepend it before the JSON
-            if original_content:
-                msg_copy["content"] = f"{original_content}\n{tool_json}"
-            else:
-                msg_copy["content"] = tool_json
+            # Use just the JSON - content is already included inside it
+            # Don't prepend content separately as it causes duplication in training data
+            msg_copy["content"] = tool_json
 
         # Remove tool_call_id from tool response messages (handled separately by tool role conversion)
         msg_copy.pop("tool_call_id", None)

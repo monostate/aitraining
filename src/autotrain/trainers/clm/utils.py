@@ -1814,6 +1814,16 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
                 desc="Pre-tokenizing validation data",
             )
 
+    # Add completion_mask for response-only training (SFT label masking)
+    # This marks which tokens are assistant responses (1) vs prompts (0)
+    if config.chat_template and "text" in train_data.column_names and config.trainer == "sft":
+        response_template = get_response_template(tokenizer)
+        if response_template:
+            logger.info(f"Adding completion_mask for response-only training (template: {repr(response_template)})")
+            train_data = add_completion_mask(train_data, tokenizer, response_template, "text")
+            if valid_data is not None:
+                valid_data = add_completion_mask(valid_data, tokenizer, response_template, "text")
+
     # Strip BOS from all processed data to prevent double BOS during training
     # The tokenizer will add BOS during tokenization (if add_bos_token=True)
     # This way the saved tokenizer retains original settings for correct inference

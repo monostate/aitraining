@@ -1681,6 +1681,32 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
                 logger.info(
                     "Dataset already has formatted text column (from auto-conversion), skipping chat template processing"
                 )
+                # Pre-tokenize the data to add 'input_ids' column
+                # TRL 0.26+ uses 'input_ids' presence to detect already-processed data
+                # Without this, TRL tries to apply chat template to 'messages' column
+                # which fails for datasets with non-alternating roles (e.g., tool calls)
+                logger.info("Pre-tokenizing already-formatted data to signal TRL that processing is complete")
+
+                def tokenize_text(example, text_column, tokenizer):
+                    text = example.get(text_column, "")
+                    if text:
+                        tokenized = tokenizer(text, truncation=False, add_special_tokens=False)
+                        return {"input_ids": tokenized["input_ids"]}
+                    return {"input_ids": []}
+
+                train_data = train_data.map(
+                    tokenize_text,
+                    fn_kwargs={"text_column": config.text_column, "tokenizer": tokenizer},
+                    load_from_cache_file=False,
+                    desc="Pre-tokenizing training data",
+                )
+                if valid_data is not None:
+                    valid_data = valid_data.map(
+                        tokenize_text,
+                        fn_kwargs={"text_column": config.text_column, "tokenizer": tokenizer},
+                        load_from_cache_file=False,
+                        desc="Pre-tokenizing validation data",
+                    )
                 # Skip to end of function where BOS stripping and turn marker validation happens
                 already_formatted = True
             else:

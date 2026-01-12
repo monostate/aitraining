@@ -114,6 +114,8 @@ FIELD_GROUPS = {
     "distill_temperature": "Knowledge Distillation",
     "distill_alpha": "Knowledge Distillation",
     "distill_max_teacher_length": "Knowledge Distillation",
+    # SFT Training
+    "response_only_loss": "SFT Training",
     # Hyperparameter Sweep
     "use_sweep": "Hyperparameter Sweep",
     "sweep_backend": "Hyperparameter Sweep",
@@ -263,6 +265,8 @@ FIELD_SCOPES = {
     "distill_temperature": ["default", "sft"],
     "distill_alpha": ["default", "sft"],
     "distill_max_teacher_length": ["default", "sft"],
+    # Response-only training (SFT label masking)
+    "response_only_loss": ["default", "sft"],
     # Sweep - all trainers
     "use_sweep": ["all"],
     "sweep_backend": ["all"],

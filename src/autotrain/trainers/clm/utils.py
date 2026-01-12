@@ -1687,23 +1687,24 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
                 # which fails for datasets with non-alternating roles (e.g., tool calls)
                 logger.info("Pre-tokenizing already-formatted data to signal TRL that processing is complete")
 
-                def tokenize_text(example, text_column, tokenizer):
-                    text = example.get(text_column, "")
-                    if text:
+                def tokenize_text(example, tokenizer):
+                    # Always use 'text' column - this is where the formatted text is stored
+                    text = example.get("text", "")
+                    if text and isinstance(text, str):
                         tokenized = tokenizer(text, truncation=False, add_special_tokens=False)
                         return {"input_ids": tokenized["input_ids"]}
                     return {"input_ids": []}
 
                 train_data = train_data.map(
                     tokenize_text,
-                    fn_kwargs={"text_column": config.text_column, "tokenizer": tokenizer},
+                    fn_kwargs={"tokenizer": tokenizer},
                     load_from_cache_file=False,
                     desc="Pre-tokenizing training data",
                 )
                 if valid_data is not None:
                     valid_data = valid_data.map(
                         tokenize_text,
-                        fn_kwargs={"text_column": config.text_column, "tokenizer": tokenizer},
+                        fn_kwargs={"tokenizer": tokenizer},
                         load_from_cache_file=False,
                         desc="Pre-tokenizing validation data",
                     )
@@ -1783,6 +1784,35 @@ def process_data_with_chat_template(config, tokenizer, train_data, valid_data):
                     },
                     load_from_cache_file=False,
                 )
+
+    # Pre-tokenize to add 'input_ids' column for TRL 0.26+ compatibility
+    # TRL uses 'input_ids' presence to detect already-processed data
+    # Without this, TRL tries to apply chat template to 'messages' column
+    # which fails for datasets with non-alternating roles (e.g., tool calls)
+    if config.chat_template and "text" in train_data.column_names:
+        logger.info("Pre-tokenizing data to signal TRL that processing is complete")
+
+        def tokenize_text_column(example, tokenizer):
+            # Always use 'text' column - this is where the formatted text is stored
+            text = example.get("text", "")
+            if text and isinstance(text, str):
+                tokenized = tokenizer(text, truncation=False, add_special_tokens=False)
+                return {"input_ids": tokenized["input_ids"]}
+            return {"input_ids": []}
+
+        train_data = train_data.map(
+            tokenize_text_column,
+            fn_kwargs={"tokenizer": tokenizer},
+            load_from_cache_file=False,
+            desc="Pre-tokenizing training data",
+        )
+        if valid_data is not None:
+            valid_data = valid_data.map(
+                tokenize_text_column,
+                fn_kwargs={"tokenizer": tokenizer},
+                load_from_cache_file=False,
+                desc="Pre-tokenizing validation data",
+            )
 
     # Strip BOS from all processed data to prevent double BOS during training
     # The tokenizer will add BOS during tokenization (if add_bos_token=True)

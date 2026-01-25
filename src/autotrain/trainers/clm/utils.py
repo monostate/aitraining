@@ -446,10 +446,10 @@ def pause_endpoint(params):
 
 def _message_from_dict(m, Message):
     """
-    Create a Message object from a dict, preserving tool_calls and tool_call_id.
+    Create a Message object from a dict, preserving tool_calls, tool_call_id, and reasoning_content.
 
     Args:
-        m (dict): Message dict with role, content, and optionally tool_calls/tool_call_id
+        m (dict): Message dict with role, content, and optionally tool_calls/tool_call_id/reasoning_content
         Message: The Message class to instantiate
 
     Returns:
@@ -460,6 +460,7 @@ def _message_from_dict(m, Message):
         content=m.get("content") or "",  # Handle None content
         tool_calls=m.get("tool_calls"),
         tool_call_id=m.get("tool_call_id"),
+        reasoning_content=m.get("reasoning_content"),
     )
 
 

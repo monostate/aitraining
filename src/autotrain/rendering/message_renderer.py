@@ -705,11 +705,29 @@ class TokenizerNativeRenderer(MessageRenderer):
         if should_inject_tools:
             tools_text = self._format_tools_as_text(tools)
 
+        # Check if template filters reasoning_content (various patterns used by different models)
+        # If so, we embed <think> directly in content to bypass the filter
+        template_filters_reasoning = False
+        if hasattr(self.tokenizer, "chat_template") and self.tokenizer.chat_template:
+            template_str = self.tokenizer.chat_template
+            # Detect patterns that filter reasoning:
+            # - Jan: loop.index0 > ns.last_query_index
+            # - DeepSeek: split('</think>')[-1] removes everything before </think>
+            if ("last_query_index" in template_str or
+                "loop.index0 >" in template_str or
+                "split('</think>')" in template_str or
+                'split("</think>")' in template_str):
+                template_filters_reasoning = True
+
         # Convert to messages format
         messages = []
         tools_injected = False
         for msg in conversation.messages:
             content = msg.content or ""
+
+            # Bypass template's reasoning filter by using placeholder (template also parses <think> from content!)
+            if template_filters_reasoning and msg.reasoning_content and msg.role == "assistant":
+                content = f"<<<THINK_PLACEHOLDER>>>\n{msg.reasoning_content}\n<<<END_THINK_PLACEHOLDER>>>\n\n{content}"
 
             # Inject tools into system message or first user message if needed
             if should_inject_tools and tools_text and not tools_injected:
@@ -745,18 +763,19 @@ class TokenizerNativeRenderer(MessageRenderer):
                 output_obj = {"content": content if content else None, "tool_calls": formatted_tool_calls}
                 content = json.dumps(output_obj, ensure_ascii=False)
                 message_dict = {"role": msg.role, "content": content}
-                if msg.reasoning_content:
+                # Only pass reasoning_content if we didn't already embed it
+                if msg.reasoning_content and not template_filters_reasoning:
                     message_dict["reasoning_content"] = msg.reasoning_content
                 messages.append(message_dict)
             elif msg.tool_calls:
                 # Tokenizer supports tool_calls natively - pass them through
                 message_dict = {"role": msg.role, "content": content, "tool_calls": msg.tool_calls}
-                if msg.reasoning_content:
+                if msg.reasoning_content and not template_filters_reasoning:
                     message_dict["reasoning_content"] = msg.reasoning_content
                 messages.append(message_dict)
             else:
                 message_dict = {"role": msg.role, "content": content}
-                if msg.reasoning_content:
+                if msg.reasoning_content and not template_filters_reasoning:
                     message_dict["reasoning_content"] = msg.reasoning_content
                 messages.append(message_dict)
 
@@ -778,10 +797,17 @@ class TokenizerNativeRenderer(MessageRenderer):
         if tools and not tools_injected and self._check_tools_support():
             template_kwargs["tools"] = tools
 
+        # Helper to replace placeholders with actual <think> tags
+        def _replace_think_placeholders(text: str) -> str:
+            if template_filters_reasoning:
+                text = text.replace("<<<THINK_PLACEHOLDER>>>", "<think>")
+                text = text.replace("<<<END_THINK_PLACEHOLDER>>>", "</think>")
+            return text
+
         # Try to apply template
         try:
             rendered = self.tokenizer.apply_chat_template(messages, **template_kwargs)
-            return rendered
+            return _replace_think_placeholders(rendered)
         except Exception as e:
             error_str = str(e).lower()
 
@@ -794,7 +820,7 @@ class TokenizerNativeRenderer(MessageRenderer):
 
                 try:
                     rendered = self.tokenizer.apply_chat_template(messages, **template_kwargs)
-                    return rendered
+                    return _replace_think_placeholders(rendered)
                 except Exception as e2:
                     logger.warning(f"Failed to apply chat template even after fixing alternation: {e2}")
 
@@ -806,7 +832,7 @@ class TokenizerNativeRenderer(MessageRenderer):
             parts = []
             for msg in messages:
                 parts.append(f"{msg['role']}: {msg['content']}")
-            return "\n".join(parts)
+            return _replace_think_placeholders("\n".join(parts))
 
     def _render_single_message(self, message: Message) -> str:
         """Render single message (simplified for weight computation)."""

@@ -1327,3 +1327,119 @@ class TestToolsDefinitionsInjection:
         # Second call uses cache
         result2 = check_tools_support(tokenizer)
         assert result1 == result2
+
+
+class TestReasoningContent:
+    """Tests for reasoning_content support (DeepSeek/Jan style thinking)."""
+
+    def test_message_has_reasoning_content_field(self):
+        """Message dataclass should have reasoning_content field."""
+        msg = Message(
+            role="assistant",
+            content="Hi there!",
+            reasoning_content="User greeted me, I should respond politely.",
+        )
+        assert msg.reasoning_content == "User greeted me, I should respond politely."
+
+    def test_message_reasoning_content_defaults_to_none(self):
+        """reasoning_content should default to None."""
+        msg = Message(role="assistant", content="Hello")
+        assert msg.reasoning_content is None
+
+    def test_jan_tokenizer_reasoning_content_to_think_tags(self):
+        """Jan tokenizer should convert reasoning_content to <think> tags."""
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("janhq/Jan-v1-4B", trust_remote_code=True)
+        except Exception:
+            pytest.skip("Jan tokenizer not available")
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!", "reasoning_content": "User greeted me, I should respond politely."},
+        ]
+
+        text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+
+        # Should contain <think> tags with reasoning
+        assert "<think>" in text
+        assert "</think>" in text
+        assert "User greeted me, I should respond politely." in text
+        assert "Hi there!" in text
+
+        # Reasoning should come before content
+        think_pos = text.find("<think>")
+        content_pos = text.find("Hi there!")
+        assert think_pos < content_pos, "Reasoning should appear before content"
+
+    def test_native_renderer_passes_reasoning_content(self):
+        """TokenizerNativeRenderer should pass reasoning_content to apply_chat_template."""
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("janhq/Jan-v1-4B", trust_remote_code=True)
+        except Exception:
+            pytest.skip("Jan tokenizer not available")
+
+        from autotrain.rendering import TokenizerNativeRenderer, RenderConfig
+
+        config = RenderConfig(add_generation_prompt=False)
+        renderer = TokenizerNativeRenderer(tokenizer, config)
+
+        conversation = Conversation(
+            messages=[
+                Message(role="system", content="You are helpful."),
+                Message(role="user", content="Hi"),
+                Message(
+                    role="assistant",
+                    content="Hello!",
+                    reasoning_content="The user said hi, I should greet them back.",
+                ),
+            ]
+        )
+
+        text = renderer.render_conversation(conversation)
+
+        # Should contain <think> tags with reasoning
+        assert "<think>" in text
+        assert "</think>" in text
+        assert "The user said hi, I should greet them back." in text
+        assert "Hello!" in text
+
+    def test_reasoning_content_with_actual_content_vs_none(self):
+        """When reasoning_content is set, it should appear in the output."""
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("janhq/Jan-v1-4B", trust_remote_code=True)
+        except Exception:
+            pytest.skip("Jan tokenizer not available")
+
+        from autotrain.rendering import TokenizerNativeRenderer, RenderConfig
+
+        config = RenderConfig(add_generation_prompt=False)
+        renderer = TokenizerNativeRenderer(tokenizer, config)
+
+        # Test WITH reasoning_content
+        conversation_with_reasoning = Conversation(
+            messages=[
+                Message(role="user", content="Hi"),
+                Message(
+                    role="assistant",
+                    content="Hello!",
+                    reasoning_content="I should greet them back.",
+                ),
+            ]
+        )
+
+        text_with = renderer.render_conversation(conversation_with_reasoning)
+        assert "I should greet them back." in text_with
+        assert "Hello!" in text_with
+
+        # Test WITHOUT reasoning_content
+        conversation_without = Conversation(
+            messages=[
+                Message(role="user", content="Hi"),
+                Message(role="assistant", content="Hello!"),  # No reasoning_content
+            ]
+        )
+
+        text_without = renderer.render_conversation(conversation_without)
+        assert "I should greet them back." not in text_without
+        assert "Hello!" in text_without

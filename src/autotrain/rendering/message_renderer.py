@@ -37,6 +37,7 @@ class Message:
     weight: float = 1.0  # Token-level weight for training
     tool_calls: Optional[List[Dict[str, Any]]] = None  # For assistant messages that call tools
     tool_call_id: Optional[str] = None  # For tool response messages
+    reasoning_content: Optional[str] = None  # For models with separate reasoning (e.g., DeepSeek)
 
 
 @dataclass
@@ -740,12 +741,21 @@ class TokenizerNativeRenderer(MessageRenderer):
                 # Build single JSON with content and all tool_calls (OpenAI format)
                 output_obj = {"content": content if content else None, "tool_calls": formatted_tool_calls}
                 content = json.dumps(output_obj, ensure_ascii=False)
-                messages.append({"role": msg.role, "content": content})
+                message_dict = {"role": msg.role, "content": content}
+                if msg.reasoning_content:
+                    message_dict["reasoning_content"] = msg.reasoning_content
+                messages.append(message_dict)
             elif msg.tool_calls:
                 # Tokenizer supports tool_calls natively - pass them through
-                messages.append({"role": msg.role, "content": content, "tool_calls": msg.tool_calls})
+                message_dict = {"role": msg.role, "content": content, "tool_calls": msg.tool_calls}
+                if msg.reasoning_content:
+                    message_dict["reasoning_content"] = msg.reasoning_content
+                messages.append(message_dict)
             else:
-                messages.append({"role": msg.role, "content": content})
+                message_dict = {"role": msg.role, "content": content}
+                if msg.reasoning_content:
+                    message_dict["reasoning_content"] = msg.reasoning_content
+                messages.append(message_dict)
 
         # Only preprocess tool messages if tokenizer doesn't support them
         if self._has_tool_messages(messages) and not self._check_tool_role_support():

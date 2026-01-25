@@ -1443,3 +1443,36 @@ class TestReasoningContent:
         text_without = renderer.render_conversation(conversation_without)
         assert "I should greet them back." not in text_without
         assert "Hello!" in text_without
+
+    def test_from_dict_to_dict_roundtrip_with_reasoning_content(self):
+        """Conversation.from_dict and to_dict should preserve reasoning_content."""
+        data = {
+            "messages": [
+                {"role": "user", "content": "Hi"},
+                {
+                    "role": "assistant",
+                    "content": "Hello!",
+                    "reasoning_content": "User said hi, respond politely.",
+                },
+            ]
+        }
+
+        # from_dict should preserve reasoning_content
+        conv = Conversation.from_dict(data)
+        assert conv.messages[1].reasoning_content == "User said hi, respond politely."
+
+        # to_dict should include reasoning_content
+        result = conv.to_dict()
+        assert result["messages"][1]["reasoning_content"] == "User said hi, respond politely."
+
+    def test_from_dict_without_reasoning_content(self):
+        """from_dict should handle messages without reasoning_content."""
+        data = {
+            "messages": [
+                {"role": "user", "content": "Hi"},
+                {"role": "assistant", "content": "Hello!"},
+            ]
+        }
+
+        conv = Conversation.from_dict(data)
+        assert conv.messages[1].reasoning_content is None

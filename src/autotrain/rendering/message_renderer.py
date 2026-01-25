@@ -60,6 +60,8 @@ class Conversation:
                 msg_dict["tool_calls"] = m.tool_calls
             if m.tool_call_id:
                 msg_dict["tool_call_id"] = m.tool_call_id
+            if m.reasoning_content:
+                msg_dict["reasoning_content"] = m.reasoning_content
             messages_list.append(msg_dict)
         return {
             "messages": messages_list,
@@ -72,10 +74,11 @@ class Conversation:
         messages = [
             Message(
                 role=m["role"],
-                content=m["content"],
+                content=m.get("content") or "",
                 weight=m.get("weight", 1.0),
                 tool_calls=m.get("tool_calls"),
                 tool_call_id=m.get("tool_call_id"),
+                reasoning_content=m.get("reasoning_content"),
             )
             for m in data["messages"]
         ]

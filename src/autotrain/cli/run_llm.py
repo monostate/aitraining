@@ -624,7 +624,7 @@ class RunAutoTrainLLMCommand(BaseAutoTrainCommand):
 
             if self.args.project_name is None or (not project_flag and self.args.project_name == "project-name"):
                 missing_params.append("project_name")
-            if self.args.data_path is None or (not data_flag and self.args.data_path == "data"):
+            if self.args.trainer != "grpo" and (self.args.data_path is None or (not data_flag and self.args.data_path == "data")):
                 missing_params.append("data_path")
             if self.args.model is None or (not model_flag and self.args.model == "google/gemma-3-270m"):
                 missing_params.append("model")
@@ -663,7 +663,7 @@ class RunAutoTrainLLMCommand(BaseAutoTrainCommand):
         if self.args.train:
             if self.args.project_name is None:
                 raise ValueError("Project name must be specified")
-            if self.args.data_path is None:
+            if self.args.data_path is None and self.args.trainer != "grpo":
                 raise ValueError("Data path must be specified")
             if self.args.model is None:
                 raise ValueError("Model must be specified")

@@ -34,7 +34,7 @@ dependencies = [
     "transformers==4.57.3",
     "accelerate==1.11.0",
     "peft==0.14.0",
-    "trl>=0.26.0",
+    "trl>=0.28.0",
     "datasets[vision]~=3.2.0",
 
     # Training utilities

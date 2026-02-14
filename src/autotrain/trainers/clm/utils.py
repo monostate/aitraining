@@ -2305,9 +2305,13 @@ def get_model(config, tokenizer):
         if bnb_config is not None:
             model_kwargs["quantization_config"] = bnb_config
 
-        # Set device map for proper placement
+        # Set device map and dtype for proper placement
         if torch.cuda.is_available():
             model_kwargs["device_map"] = "auto"
+            if config.mixed_precision == "bf16":
+                model_kwargs["torch_dtype"] = torch.bfloat16
+            elif config.mixed_precision == "fp16":
+                model_kwargs["torch_dtype"] = torch.float16
         elif torch.backends.mps.is_available():
             # For MPS, we'll load to CPU first then move manually
             pass

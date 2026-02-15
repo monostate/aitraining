@@ -77,6 +77,11 @@ def train(config):
     training_args["epsilon"] = config.rl_clip_range
     training_args["loss_type"] = "grpo"
 
+    if config.use_vllm:
+        training_args["use_vllm"] = True
+        training_args["vllm_mode"] = config.vllm_mode
+        training_args["vllm_gpu_memory_utilization"] = config.vllm_gpu_memory_utilization
+
     grpo_config = GRPOConfig(**training_args)
 
     # 9. Create trainer

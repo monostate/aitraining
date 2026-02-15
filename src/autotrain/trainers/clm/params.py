@@ -319,6 +319,9 @@ class LLMTrainingParams(AutoTrainParams):
         title="Class name in rl_env_module (e.g., 'HotelEnv')",
     )
     rl_num_generations: int = Field(4, title="Number of completions per prompt for GRPO")
+    use_vllm: bool = Field(False, title="Use vLLM for faster generation in GRPO")
+    vllm_mode: str = Field("colocate", title="vLLM mode: 'server' or 'colocate'")
+    vllm_gpu_memory_utilization: float = Field(0.3, title="Fraction of GPU memory for vLLM (colocate mode)")
 
     # Custom Losses
     custom_loss: Optional[str] = Field(

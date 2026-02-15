@@ -156,6 +156,9 @@ FIELD_GROUPS = {
     "rl_env_module": "Reinforcement Learning (GRPO)",
     "rl_env_class": "Reinforcement Learning (GRPO)",
     "rl_num_generations": "Reinforcement Learning (GRPO)",
+    "use_vllm": "Reinforcement Learning (GRPO)",
+    "vllm_mode": "Reinforcement Learning (GRPO)",
+    "vllm_gpu_memory_utilization": "Reinforcement Learning (GRPO)",
     # Advanced/Research Features
     "custom_loss": "Advanced Features",
     "custom_loss_weights": "Advanced Features",
@@ -317,6 +320,9 @@ FIELD_SCOPES = {
     "rl_env_module": ["grpo"],
     "rl_env_class": ["grpo"],
     "rl_num_generations": ["grpo"],
+    "use_vllm": ["grpo"],
+    "vllm_mode": ["grpo"],
+    "vllm_gpu_memory_utilization": ["grpo"],
     # Advanced features
     "custom_loss": ["all"],
     "custom_loss_weights": ["all"],
@@ -585,6 +591,7 @@ class RunAutoTrainLLMCommand(BaseAutoTrainCommand):
             # RL features
             "rl_multi_objective",
             "rl_optimize_device_cache",
+            "use_vllm",
             # Advanced
             "use_forward_backward",
             "manual_optimizer_control",

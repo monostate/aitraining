@@ -2307,7 +2307,12 @@ def get_model(config, tokenizer):
 
         # Set device map and dtype for proper placement
         if torch.cuda.is_available():
-            model_kwargs["device_map"] = "auto"
+            world_size = int(os.environ.get("WORLD_SIZE", "1"))
+            if world_size > 1:
+                local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+                model_kwargs["device_map"] = {"": local_rank}
+            else:
+                model_kwargs["device_map"] = "auto"
             if config.mixed_precision == "bf16":
                 model_kwargs["torch_dtype"] = torch.bfloat16
             elif config.mixed_precision == "fp16":
@@ -2362,7 +2367,12 @@ def get_model(config, tokenizer):
 
         # Set device map and dtype for proper placement
         if torch.cuda.is_available():
-            model_kwargs["device_map"] = "auto"
+            world_size = int(os.environ.get("WORLD_SIZE", "1"))
+            if world_size > 1:
+                local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+                model_kwargs["device_map"] = {"": local_rank}
+            else:
+                model_kwargs["device_map"] = "auto"
             # Set dtype based on mixed_precision to avoid loading in float32
             if config.mixed_precision == "bf16":
                 model_kwargs["torch_dtype"] = torch.bfloat16

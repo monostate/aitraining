@@ -159,6 +159,11 @@ FIELD_GROUPS = {
     "use_vllm": "Reinforcement Learning (GRPO)",
     "vllm_mode": "Reinforcement Learning (GRPO)",
     "vllm_gpu_memory_utilization": "Reinforcement Learning (GRPO)",
+    "vllm_server_url": "Reinforcement Learning (GRPO)",
+    "vllm_tensor_parallel_size": "Reinforcement Learning (GRPO)",
+    "vllm_server_gpus": "Reinforcement Learning (GRPO)",
+    # DDP/NCCL
+    "ddp_timeout": "Training Configuration",
     # Advanced/Research Features
     "custom_loss": "Advanced Features",
     "custom_loss_weights": "Advanced Features",
@@ -323,6 +328,11 @@ FIELD_SCOPES = {
     "use_vllm": ["grpo"],
     "vllm_mode": ["grpo"],
     "vllm_gpu_memory_utilization": ["grpo"],
+    "vllm_server_url": ["grpo"],
+    "vllm_tensor_parallel_size": ["grpo"],
+    "vllm_server_gpus": ["grpo"],
+    # DDP/NCCL
+    "ddp_timeout": ["all"],
     # Advanced features
     "custom_loss": ["all"],
     "custom_loss_weights": ["all"],

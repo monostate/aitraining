@@ -1997,6 +1997,7 @@ def configure_training_args(config, logging_steps):
         push_to_hub=False,
         load_best_model_at_end=True if config.valid_split is not None else False,
         ddp_find_unused_parameters=False,
+        ddp_timeout=config.ddp_timeout,
         gradient_checkpointing=not config.disable_gradient_checkpointing,
         remove_unused_columns=False,
     )

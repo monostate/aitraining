@@ -241,3 +241,127 @@ class TestGRPOFieldScopes:
         ]
         for param in ppo_only:
             assert "grpo" not in FIELD_SCOPES[param], f"{param} should NOT include grpo"
+
+
+class TestDDPTimeout:
+    def test_ddp_timeout_default(self):
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft")
+        assert config.ddp_timeout == 7200
+
+    def test_ddp_timeout_custom(self):
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft", ddp_timeout=3600)
+        assert config.ddp_timeout == 3600
+
+    def test_ddp_timeout_in_training_args(self):
+        from autotrain.trainers.clm.utils import configure_training_args
+
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft", ddp_timeout=9000)
+        training_args = configure_training_args(config, logging_steps=10)
+        assert training_args["ddp_timeout"] == 9000
+
+    def test_ddp_timeout_field_scope(self):
+        from autotrain.cli.run_llm import FIELD_SCOPES
+
+        assert "ddp_timeout" in FIELD_SCOPES
+        assert FIELD_SCOPES["ddp_timeout"] == ["all"]
+
+    def test_nccl_env_var_set(self):
+        """Verify launch_command sets TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC."""
+        import os
+
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft", ddp_timeout=5000)
+        from autotrain.commands import launch_command
+
+        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = "1"
+        try:
+            launch_command(config)
+            assert os.environ.get("TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC") == "5000"
+        finally:
+            os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)
+            os.environ.pop("TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC", None)
+
+
+class TestVLLMServerMode:
+    def test_vllm_server_params_defaults(self):
+        config = LLMTrainingParams(
+            model=TINY_MODEL,
+            trainer="grpo",
+            rl_env_module="tests.test_grpo_trainer",
+            rl_env_class="SimpleMatchEnv",
+        )
+        assert config.vllm_server_url is None
+        assert config.vllm_tensor_parallel_size == 1
+        assert config.vllm_server_gpus == 1
+
+    def test_vllm_server_params_custom(self):
+        config = LLMTrainingParams(
+            model=TINY_MODEL,
+            trainer="grpo",
+            rl_env_module="tests.test_grpo_trainer",
+            rl_env_class="SimpleMatchEnv",
+            use_vllm=True,
+            vllm_mode="server",
+            vllm_server_url="http://localhost:8000/v1",
+            vllm_tensor_parallel_size=2,
+            vllm_server_gpus=2,
+        )
+        assert config.vllm_server_url == "http://localhost:8000/v1"
+        assert config.vllm_tensor_parallel_size == 2
+        assert config.vllm_server_gpus == 2
+
+    def test_vllm_server_field_scopes(self):
+        from autotrain.cli.run_llm import FIELD_SCOPES
+
+        assert FIELD_SCOPES["vllm_server_url"] == ["grpo"]
+        assert FIELD_SCOPES["vllm_tensor_parallel_size"] == ["grpo"]
+        assert FIELD_SCOPES["vllm_server_gpus"] == ["grpo"]
+
+    def test_vllm_server_reduces_num_processes(self):
+        """Verify launch_command reduces num_processes when vllm_mode=server."""
+        import os
+
+        config = LLMTrainingParams(
+            model=TINY_MODEL,
+            trainer="grpo",
+            rl_env_module="tests.test_grpo_trainer",
+            rl_env_class="SimpleMatchEnv",
+            use_vllm=True,
+            vllm_mode="server",
+            vllm_server_gpus=2,
+        )
+        from autotrain.commands import launch_command
+
+        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = "4"
+        try:
+            cmd = launch_command(config)
+            # Should have 4 - 2 = 2 training processes
+            if "--num_processes" in cmd:
+                idx = cmd.index("--num_processes")
+                assert cmd[idx + 1] == "2"
+        finally:
+            os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)
+
+    def test_vllm_colocate_does_not_reduce_processes(self):
+        """Verify colocate mode does NOT reduce num_processes."""
+        import os
+
+        config = LLMTrainingParams(
+            model=TINY_MODEL,
+            trainer="grpo",
+            rl_env_module="tests.test_grpo_trainer",
+            rl_env_class="SimpleMatchEnv",
+            use_vllm=True,
+            vllm_mode="colocate",
+            vllm_server_gpus=2,
+        )
+        from autotrain.commands import launch_command
+
+        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = "4"
+        try:
+            cmd = launch_command(config)
+            # Should still use all 4 GPUs
+            if "--num_processes" in cmd:
+                idx = cmd.index("--num_processes")
+                assert cmd[idx + 1] == "4"
+        finally:
+            os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)

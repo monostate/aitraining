@@ -322,6 +322,12 @@ class LLMTrainingParams(AutoTrainParams):
     use_vllm: bool = Field(False, title="Use vLLM for faster generation in GRPO")
     vllm_mode: str = Field("colocate", title="vLLM mode: 'server' or 'colocate'")
     vllm_gpu_memory_utilization: float = Field(0.3, title="Fraction of GPU memory for vLLM (colocate mode)")
+    vllm_server_url: Optional[str] = Field(None, title="URL of external vLLM server (for vllm_mode='server')")
+    vllm_tensor_parallel_size: int = Field(1, title="Number of GPUs for vLLM tensor parallelism")
+    vllm_server_gpus: int = Field(1, title="Number of GPUs dedicated to vLLM server (subtracted from training processes)")
+
+    # DDP/NCCL
+    ddp_timeout: int = Field(7200, title="DDP timeout in seconds for NCCL operations (default 7200)")
 
     # Custom Losses
     custom_loss: Optional[str] = Field(

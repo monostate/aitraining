@@ -170,8 +170,20 @@ def launch_command(params):
         else:
             num_gpus = 0
     if isinstance(params, LLMTrainingParams):
+        # Set NCCL timeout env var for long-running operations (e.g. GRPO reward scoring)
+        os.environ["TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC"] = str(params.ddp_timeout)
+
+        # For vLLM server mode, reserve GPUs for the vLLM server
+        effective_num_gpus = num_gpus
+        if getattr(params, "use_vllm", False) and getattr(params, "vllm_mode", "") == "server":
+            effective_num_gpus = max(1, num_gpus - params.vllm_server_gpus)
+            logger.info(
+                f"vLLM server mode: reserving {params.vllm_server_gpus} GPU(s) for vLLM, "
+                f"{effective_num_gpus} GPU(s) for training"
+            )
+
         # Create a fresh copy of the command list to avoid accumulation
-        cmd = list(get_accelerate_command(num_gpus, params.gradient_accumulation, params.distributed_backend))
+        cmd = list(get_accelerate_command(effective_num_gpus, params.gradient_accumulation, params.distributed_backend))
         if num_gpus > 0:
             cmd.append("--mixed_precision")
             if params.mixed_precision == "fp16":

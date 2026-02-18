@@ -82,7 +82,7 @@ def train(config):
         training_args["vllm_mode"] = config.vllm_mode
         training_args["vllm_gpu_memory_utilization"] = config.vllm_gpu_memory_utilization
         if config.vllm_mode == "server" and config.vllm_server_url:
-            training_args["vllm_server_url"] = config.vllm_server_url
+            training_args["vllm_server_base_url"] = config.vllm_server_url
         training_args["vllm_tensor_parallel_size"] = config.vllm_tensor_parallel_size
 
     grpo_config = GRPOConfig(**training_args)

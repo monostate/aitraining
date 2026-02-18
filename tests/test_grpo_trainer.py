@@ -309,6 +309,21 @@ class TestVLLMServerMode:
         assert config.vllm_tensor_parallel_size == 2
         assert config.vllm_server_gpus == 2
 
+    def test_vllm_server_url_maps_to_grpo_config_key(self):
+        """Verify vllm_server_url maps to vllm_server_base_url in GRPOConfig."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            grpo_config = GRPOConfig(
+                output_dir=tmpdir,
+                num_generations=2,
+                max_completion_length=16,
+                per_device_train_batch_size=2,
+                report_to="none",
+                use_vllm=True,
+                vllm_mode="server",
+                vllm_server_base_url="http://localhost:8000/v1",
+            )
+            assert grpo_config.vllm_server_base_url == "http://localhost:8000/v1"
+
     def test_vllm_server_field_scopes(self):
         from autotrain.cli.run_llm import FIELD_SCOPES
 

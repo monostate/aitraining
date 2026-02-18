@@ -365,3 +365,79 @@ class TestVLLMServerMode:
                 assert cmd[idx + 1] == "4"
         finally:
             os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)
+
+
+class TestResumeFromCheckpoint:
+    def test_resume_default_none(self):
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft")
+        assert config.resume_from_checkpoint is None
+
+    def test_resume_explicit_value(self):
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft", resume_from_checkpoint="/tmp/ckpt")
+        assert config.resume_from_checkpoint == "/tmp/ckpt"
+
+    def test_get_resume_checkpoint_none(self):
+        from autotrain.trainers.clm.utils import get_resume_checkpoint
+
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft")
+        assert get_resume_checkpoint(config) is None
+
+    def test_get_resume_checkpoint_auto_no_checkpoints(self):
+        from autotrain.trainers.clm.utils import get_resume_checkpoint
+
+        config = LLMTrainingParams(
+            model=TINY_MODEL, trainer="sft",
+            resume_from_checkpoint="auto",
+            project_name="/tmp/nonexistent_proj_xyz",
+        )
+        assert get_resume_checkpoint(config) is None
+
+    def test_get_resume_checkpoint_auto_with_checkpoints(self):
+        import os
+        from autotrain.trainers.clm.utils import get_resume_checkpoint
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, "checkpoint-100"))
+            os.makedirs(os.path.join(tmpdir, "checkpoint-200"))
+            os.makedirs(os.path.join(tmpdir, "checkpoint-50"))
+            config = LLMTrainingParams(
+                model=TINY_MODEL, trainer="sft",
+                resume_from_checkpoint="auto",
+                project_name=tmpdir,
+            )
+            result = get_resume_checkpoint(config)
+            # sorted numerically: checkpoint-50, checkpoint-100, checkpoint-200 -> last is checkpoint-200
+            assert result == os.path.join(tmpdir, "checkpoint-200")
+
+    def test_get_resume_checkpoint_valid_path(self):
+        import os
+        from autotrain.trainers.clm.utils import get_resume_checkpoint
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ckpt = os.path.join(tmpdir, "checkpoint-42")
+            os.makedirs(ckpt)
+            config = LLMTrainingParams(
+                model=TINY_MODEL, trainer="sft",
+                resume_from_checkpoint=ckpt,
+            )
+            assert get_resume_checkpoint(config) == ckpt
+
+    def test_get_resume_checkpoint_invalid_path(self):
+        from autotrain.trainers.clm.utils import get_resume_checkpoint
+
+        config = LLMTrainingParams(
+            model=TINY_MODEL, trainer="sft",
+            resume_from_checkpoint="/tmp/does_not_exist_xyz_123",
+        )
+        assert get_resume_checkpoint(config) is None
+
+    def test_resume_field_scope(self):
+        from autotrain.cli.run_llm import FIELD_SCOPES
+
+        assert "resume_from_checkpoint" in FIELD_SCOPES
+        assert FIELD_SCOPES["resume_from_checkpoint"] == ["all"]
+
+    def test_resume_field_group(self):
+        from autotrain.cli.run_llm import FIELD_GROUPS
+
+        assert FIELD_GROUPS["resume_from_checkpoint"] == "Training Configuration"

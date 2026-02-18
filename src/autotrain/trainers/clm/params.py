@@ -205,6 +205,11 @@ class LLMTrainingParams(AutoTrainParams):
     # unsloth
     unsloth: bool = Field(False, title="Whether to use the unsloth library")
     distributed_backend: Optional[str] = Field(None, title="Backend to use for distributed training")
+    resume_from_checkpoint: Optional[str] = Field(
+        None,
+        title="Resume training from a checkpoint. Can be a path to a checkpoint directory, "
+        "or 'auto' to auto-detect the latest checkpoint in the output directory.",
+    )
 
     # ========================================
     # Tinker-Inspired Features

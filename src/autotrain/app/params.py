@@ -38,7 +38,6 @@ HIDDEN_PARAMS = [
     "class_prompt",
     "num_class_images",
     "class_labels_conditioning",
-    "resume_from_checkpoint",
     "dataloader_num_workers",
     "allow_tf32",
     "prior_generation_precision",

@@ -575,7 +575,7 @@ def train(config):
     logger.info("Starting PPO training...")
 
     # In newer TRL versions, PPOTrainer uses the standard train() method
-    ppo_trainer.train()
+    ppo_trainer.train(resume_from_checkpoint=utils.get_resume_checkpoint(config))
 
     # Save final model
     utils.post_training_steps(config, ppo_trainer)

@@ -482,6 +482,6 @@ def train(config):
             )
 
     trainer.remove_callback(PrinterCallback)
-    trainer.train()
+    trainer.train(resume_from_checkpoint=utils.get_resume_checkpoint(config))
     utils.post_training_steps(config, trainer)
     return trainer

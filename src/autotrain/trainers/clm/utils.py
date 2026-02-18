@@ -2020,6 +2020,34 @@ def configure_training_args(config, logging_steps):
     return training_args
 
 
+def get_resume_checkpoint(config):
+    """Resolve resume_from_checkpoint to a path or None."""
+    resume = getattr(config, "resume_from_checkpoint", None)
+    if resume is None:
+        return None
+    if resume.lower() in ("true", "auto", "latest"):
+        import glob
+
+        checkpoints = sorted(
+            glob.glob(os.path.join(config.project_name, "checkpoint-*")),
+            key=lambda x: int(x.rsplit("-", 1)[-1]) if x.rsplit("-", 1)[-1].isdigit() else 0,
+        )
+        if checkpoints:
+            latest = checkpoints[-1]
+            logger.info(f"Auto-detected checkpoint for resume: {latest}")
+            return latest
+        logger.warning(
+            f"resume_from_checkpoint='auto' but no checkpoints found in {config.project_name}. Starting fresh."
+        )
+        return None
+    elif os.path.isdir(resume):
+        logger.info(f"Resuming from explicit checkpoint: {resume}")
+        return resume
+    else:
+        logger.warning(f"resume_from_checkpoint path not found: {resume}. Starting fresh.")
+        return None
+
+
 def configure_block_size(config, tokenizer):
     """
     Configures the block size for the given configuration and tokenizer.

@@ -157,7 +157,7 @@ def train(config):
     )
 
     trainer.remove_callback(PrinterCallback)
-    trainer.train()
+    trainer.train(resume_from_checkpoint=utils.get_resume_checkpoint(config))
 
     # Ensure config.use_cache is set before saving
     trainer.model.config.use_cache = True

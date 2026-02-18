@@ -418,7 +418,7 @@ def train_prompt_distillation(
 
     # Train
     logger.info("Starting training...")
-    trainer.train()
+    trainer.train(resume_from_checkpoint=utils.get_resume_checkpoint(config))
 
     # Save final model
     logger.info(f"Saving model to {output_dir}")

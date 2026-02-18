@@ -75,6 +75,7 @@ FIELD_GROUPS = {
     "auto_find_batch_size": "Training Configuration",
     "mixed_precision": "Training Configuration",
     "distributed_backend": "Training Configuration",
+    "resume_from_checkpoint": "Training Configuration",
     "wandb_visualizer": "Training Configuration",
     # Training Hyperparameters
     "lr": "Training Hyperparameters",
@@ -224,6 +225,7 @@ FIELD_SCOPES = {
     "auto_find_batch_size": ["all"],
     "mixed_precision": ["all"],
     "distributed_backend": ["all"],
+    "resume_from_checkpoint": ["all"],
     "wandb_visualizer": ["all"],
     # Hyperparameters - all trainers
     "lr": ["all"],

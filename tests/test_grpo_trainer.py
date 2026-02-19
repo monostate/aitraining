@@ -280,6 +280,30 @@ class TestDDPTimeout:
             os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)
             os.environ.pop("TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC", None)
 
+    def test_ddp_timeout_in_accelerate_command(self):
+        """Verify --timeout flag is passed to accelerate launch for multi-GPU."""
+        import os
+        from autotrain.commands import launch_command
+
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft", ddp_timeout=7200)
+        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = "4"
+        try:
+            cmd = launch_command(config)
+            assert "--timeout" in cmd
+            idx = cmd.index("--timeout")
+            assert cmd[idx + 1] == "7200"
+        finally:
+            os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)
+            os.environ.pop("TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC", None)
+
+    def test_ddp_timeout_not_in_single_gpu(self):
+        """Single GPU doesn't need --timeout flag."""
+        import os
+        from autotrain.commands import get_accelerate_command
+
+        cmd = get_accelerate_command(1, ddp_timeout=7200)
+        assert "--timeout" not in cmd
+
 
 class TestVLLMServerMode:
     def test_vllm_server_params_defaults(self):

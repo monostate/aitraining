@@ -36,7 +36,7 @@ SINGLE_GPU_COMMAND = [
 ]
 
 
-def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_backend=None):
+def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_backend=None, ddp_timeout=None):
     """
     Generates the appropriate command to launch a training job using the `accelerate` library based on the number of GPUs
     and the specified distributed backend.
@@ -63,7 +63,7 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
         return list(SINGLE_GPU_COMMAND)  # Return a copy to avoid mutation
 
     if distributed_backend in ("ddp", None):
-        return [
+        cmd = [
             "accelerate",
             "launch",
             "--multi_gpu",
@@ -72,8 +72,11 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
             "--num_processes",
             str(num_gpus),
         ]
+        if ddp_timeout is not None:
+            cmd.extend(["--timeout", str(ddp_timeout)])
+        return cmd
     elif distributed_backend == "deepspeed":
-        return [
+        cmd = [
             "accelerate",
             "launch",
             "--use_deepspeed",
@@ -92,6 +95,9 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
             "--gradient_accumulation_steps",
             str(gradient_accumulation_steps),
         ]
+        if ddp_timeout is not None:
+            cmd.extend(["--timeout", str(ddp_timeout)])
+        return cmd
     else:
         raise ValueError("Unsupported distributed backend")
 
@@ -183,7 +189,7 @@ def launch_command(params):
             )
 
         # Create a fresh copy of the command list to avoid accumulation
-        cmd = list(get_accelerate_command(effective_num_gpus, params.gradient_accumulation, params.distributed_backend))
+        cmd = list(get_accelerate_command(effective_num_gpus, params.gradient_accumulation, params.distributed_backend, ddp_timeout=params.ddp_timeout))
         if num_gpus > 0:
             cmd.append("--mixed_precision")
             if params.mixed_precision == "fp16":

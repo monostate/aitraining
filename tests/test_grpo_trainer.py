@@ -280,28 +280,26 @@ class TestDDPTimeout:
             os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)
             os.environ.pop("TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC", None)
 
-    def test_ddp_timeout_in_accelerate_command(self):
-        """Verify --timeout flag is passed to accelerate launch for multi-GPU."""
+    def test_nccl_timeout_env_var_set(self):
+        """Verify launch_command sets NCCL_TIMEOUT env var."""
         import os
         from autotrain.commands import launch_command
 
-        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft", ddp_timeout=7200)
-        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = "4"
+        config = LLMTrainingParams(model=TINY_MODEL, trainer="sft", ddp_timeout=5000)
+        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = "1"
         try:
-            cmd = launch_command(config)
-            assert "--timeout" in cmd
-            idx = cmd.index("--timeout")
-            assert cmd[idx + 1] == "7200"
+            launch_command(config)
+            assert os.environ.get("NCCL_TIMEOUT") == "5000"
         finally:
             os.environ.pop("AUTOTRAIN_FORCE_NUM_GPUS", None)
             os.environ.pop("TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC", None)
+            os.environ.pop("NCCL_TIMEOUT", None)
 
-    def test_ddp_timeout_not_in_single_gpu(self):
-        """Single GPU doesn't need --timeout flag."""
-        import os
+    def test_no_timeout_flag_in_accelerate_command(self):
+        """accelerate launch does not support --timeout flag."""
         from autotrain.commands import get_accelerate_command
 
-        cmd = get_accelerate_command(1, ddp_timeout=7200)
+        cmd = get_accelerate_command(4)
         assert "--timeout" not in cmd
 
 

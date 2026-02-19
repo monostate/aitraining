@@ -36,7 +36,7 @@ SINGLE_GPU_COMMAND = [
 ]
 
 
-def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_backend=None, ddp_timeout=None):
+def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_backend=None):
     """
     Generates the appropriate command to launch a training job using the `accelerate` library based on the number of GPUs
     and the specified distributed backend.
@@ -63,7 +63,7 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
         return list(SINGLE_GPU_COMMAND)  # Return a copy to avoid mutation
 
     if distributed_backend in ("ddp", None):
-        cmd = [
+        return [
             "accelerate",
             "launch",
             "--multi_gpu",
@@ -72,11 +72,8 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
             "--num_processes",
             str(num_gpus),
         ]
-        if ddp_timeout is not None:
-            cmd.extend(["--timeout", str(ddp_timeout)])
-        return cmd
     elif distributed_backend == "deepspeed":
-        cmd = [
+        return [
             "accelerate",
             "launch",
             "--use_deepspeed",
@@ -95,9 +92,6 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
             "--gradient_accumulation_steps",
             str(gradient_accumulation_steps),
         ]
-        if ddp_timeout is not None:
-            cmd.extend(["--timeout", str(ddp_timeout)])
-        return cmd
     else:
         raise ValueError("Unsupported distributed backend")
 
@@ -176,8 +170,9 @@ def launch_command(params):
         else:
             num_gpus = 0
     if isinstance(params, LLMTrainingParams):
-        # Set NCCL timeout env var for long-running operations (e.g. GRPO reward scoring)
+        # Set NCCL timeout env vars for long-running operations (e.g. GRPO reward scoring)
         os.environ["TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC"] = str(params.ddp_timeout)
+        os.environ.setdefault("NCCL_TIMEOUT", str(params.ddp_timeout))
 
         # For vLLM server mode, reserve GPUs for the vLLM server
         effective_num_gpus = num_gpus
@@ -189,7 +184,7 @@ def launch_command(params):
             )
 
         # Create a fresh copy of the command list to avoid accumulation
-        cmd = list(get_accelerate_command(effective_num_gpus, params.gradient_accumulation, params.distributed_backend, ddp_timeout=params.ddp_timeout))
+        cmd = list(get_accelerate_command(effective_num_gpus, params.gradient_accumulation, params.distributed_backend))
         if num_gpus > 0:
             cmd.append("--mixed_precision")
             if params.mixed_precision == "fp16":

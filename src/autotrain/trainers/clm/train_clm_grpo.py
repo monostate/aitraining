@@ -97,6 +97,15 @@ def train(config):
         peft_config=peft_config,
     )
 
+    # Override NCCL per-operation timeout (default 600s is too short for GRPO reward scoring)
+    if config.ddp_timeout and torch.distributed.is_initialized():
+        from datetime import timedelta
+
+        torch.distributed.distributed_c10d._get_default_group()._get_backend(
+            torch.device("cuda")
+        ).options._timeout = timedelta(seconds=config.ddp_timeout)
+        logger.info(f"Set NCCL operation timeout to {config.ddp_timeout}s")
+
     # 10. Train
     trainer.train(resume_from_checkpoint=utils.get_resume_checkpoint(config))
     utils.post_training_steps(config, trainer)

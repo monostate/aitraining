@@ -324,6 +324,8 @@ class LLMTrainingParams(AutoTrainParams):
         title="Class name in rl_env_module (e.g., 'HotelEnv')",
     )
     rl_num_generations: int = Field(4, title="Number of completions per prompt for GRPO")
+    rl_loss_type: str = Field("grpo", title="GRPO loss type: grpo, dapo, dr_grpo, bnpo, cispo, sapo")
+    rl_mask_truncated_completions: bool = Field(False, title="Mask truncated completions from loss (recommended for stability)")
     use_vllm: bool = Field(False, title="Use vLLM for faster generation in GRPO")
     vllm_mode: str = Field("colocate", title="vLLM mode: 'server' or 'colocate'")
     vllm_gpu_memory_utilization: float = Field(0.3, title="Fraction of GPU memory for vLLM (colocate mode)")

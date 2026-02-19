@@ -95,6 +95,21 @@ class TestGRPOConfigCreation:
             assert grpo_config.loss_type == "grpo"
             assert grpo_config.beta == 0.0
 
+    def test_grpo_config_dr_grpo_loss(self):
+        """Verify dr_grpo loss_type is accepted by GRPOConfig."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            grpo_config = GRPOConfig(
+                output_dir=tmpdir,
+                num_generations=2,
+                max_completion_length=32,
+                loss_type="dr_grpo",
+                mask_truncated_completions=True,
+                per_device_train_batch_size=2,
+                report_to="none",
+            )
+            assert grpo_config.loss_type == "dr_grpo"
+            assert grpo_config.mask_truncated_completions is True
+
 
 class TestGRPOTrainerRuns:
     @pytest.mark.slow
@@ -207,6 +222,28 @@ class TestGRPOParamsValidation:
         assert config.rl_max_new_tokens == 256
         assert config.rl_clip_range == 0.1
 
+    def test_grpo_loss_type_and_mask_params(self):
+        config = LLMTrainingParams(
+            model=TINY_MODEL,
+            trainer="grpo",
+            rl_env_module="my_envs.hotel_env",
+            rl_env_class="HotelEnv",
+            rl_loss_type="dr_grpo",
+            rl_mask_truncated_completions=True,
+        )
+        assert config.rl_loss_type == "dr_grpo"
+        assert config.rl_mask_truncated_completions is True
+
+    def test_grpo_loss_type_default(self):
+        config = LLMTrainingParams(
+            model=TINY_MODEL,
+            trainer="grpo",
+            rl_env_module="my_envs.hotel_env",
+            rl_env_class="HotelEnv",
+        )
+        assert config.rl_loss_type == "grpo"
+        assert config.rl_mask_truncated_completions is False
+
 
 class TestGRPOFieldScopes:
     def test_grpo_in_valid_trainers(self):
@@ -220,6 +257,8 @@ class TestGRPOFieldScopes:
         assert FIELD_SCOPES["rl_env_module"] == ["grpo"]
         assert FIELD_SCOPES["rl_env_class"] == ["grpo"]
         assert FIELD_SCOPES["rl_num_generations"] == ["grpo"]
+        assert FIELD_SCOPES["rl_loss_type"] == ["grpo"]
+        assert FIELD_SCOPES["rl_mask_truncated_completions"] == ["grpo"]
 
     def test_shared_params_include_grpo(self):
         from autotrain.cli.run_llm import FIELD_SCOPES

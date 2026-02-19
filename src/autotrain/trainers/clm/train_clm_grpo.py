@@ -75,7 +75,8 @@ def train(config):
     training_args["top_k"] = config.rl_top_k
     training_args["beta"] = config.rl_kl_coef
     training_args["epsilon"] = config.rl_clip_range
-    training_args["loss_type"] = "grpo"
+    training_args["loss_type"] = config.rl_loss_type
+    training_args["mask_truncated_completions"] = config.rl_mask_truncated_completions
 
     if config.use_vllm:
         training_args["use_vllm"] = True

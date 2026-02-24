@@ -517,3 +517,116 @@ class TestResumeFromCheckpoint:
         from autotrain.cli.run_llm import FIELD_GROUPS
 
         assert FIELD_GROUPS["resume_from_checkpoint"] == "Training Configuration"
+
+
+class TestORPOMultiTurnPrompt:
+    """Test that ORPO/DPO prompt extraction uses explicit prompt column for multi-turn."""
+
+    def _make_config(self, trainer="orpo"):
+        return LLMTrainingParams(
+            model=TINY_MODEL,
+            trainer=trainer,
+            prompt_text_column="prompt",
+            rejected_text_column="rejected",
+        )
+
+    def _make_renderer(self):
+        from autotrain.rendering.message_renderer import get_renderer
+
+        tokenizer = AutoTokenizer.from_pretrained(TINY_MODEL)
+        return get_renderer("native", tokenizer), tokenizer
+
+    def test_multiturn_uses_explicit_prompt(self):
+        """When prompt column is a messages list, it should be used instead of chosen[:-1]."""
+        from autotrain.trainers.clm.utils import apply_chat_template_unified
+
+        renderer, _ = self._make_renderer()
+        config = self._make_config("orpo")
+
+        # Multi-turn: prompt is first 2 messages, chosen has full 4-message trajectory
+        example = {
+            "prompt": [
+                {"role": "user", "content": "Book me a hotel"},
+                {"role": "assistant", "content": "Sure, let me search."},
+            ],
+            "chosen": [
+                {"role": "user", "content": "Book me a hotel"},
+                {"role": "assistant", "content": "Sure, let me search."},
+                {"role": "user", "content": "In Paris please"},
+                {"role": "assistant", "content": "Done, booked Hotel Lumiere."},
+            ],
+            "rejected": [
+                {"role": "user", "content": "Book me a hotel"},
+                {"role": "assistant", "content": "Sure, let me search."},
+                {"role": "user", "content": "In Paris please"},
+                {"role": "assistant", "content": "I cannot do that."},
+            ],
+        }
+
+        result = apply_chat_template_unified(example, renderer, config)
+
+        # Prompt should be rendered from the explicit 2-message prompt, not chosen[:-1] (3 messages)
+        assert "Book me a hotel" in result["prompt"]
+        assert "Sure, let me search" in result["prompt"]
+        # Prompt should NOT contain the second user turn (that's part of the completion)
+        assert "In Paris please" not in result["prompt"]
+
+        # Chosen and rejected should contain the full trajectory
+        assert "Done, booked Hotel Lumiere" in result["chosen"]
+        assert "I cannot do that" in result["rejected"]
+
+    def test_singleturn_falls_back_to_chosen_minus_last(self):
+        """Without explicit prompt column, should fall back to chosen[:-1]."""
+        from autotrain.trainers.clm.utils import apply_chat_template_unified
+
+        renderer, _ = self._make_renderer()
+        config = self._make_config("orpo")
+
+        example = {
+            "chosen": [
+                {"role": "user", "content": "What is 2+2?"},
+                {"role": "assistant", "content": "4"},
+            ],
+            "rejected": [
+                {"role": "user", "content": "What is 2+2?"},
+                {"role": "assistant", "content": "5"},
+            ],
+        }
+
+        result = apply_chat_template_unified(example, renderer, config)
+
+        # Prompt should be derived from chosen[:-1] = just the user message
+        assert "What is 2+2" in result["prompt"]
+        assert "4" in result["chosen"]
+        assert "5" in result["rejected"]
+
+    def test_dpo_also_uses_explicit_prompt(self):
+        """DPO trainer shares the same code path."""
+        from autotrain.trainers.clm.utils import apply_chat_template_unified
+
+        renderer, _ = self._make_renderer()
+        config = self._make_config("dpo")
+
+        example = {
+            "prompt": [
+                {"role": "user", "content": "Hello"},
+            ],
+            "chosen": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"},
+                {"role": "user", "content": "How are you?"},
+                {"role": "assistant", "content": "Great, thanks!"},
+            ],
+            "rejected": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"},
+                {"role": "user", "content": "How are you?"},
+                {"role": "assistant", "content": "Go away."},
+            ],
+        }
+
+        result = apply_chat_template_unified(example, renderer, config)
+
+        # Prompt should only contain "Hello" user message
+        assert "Hello" in result["prompt"]
+        assert "How are you" not in result["prompt"]

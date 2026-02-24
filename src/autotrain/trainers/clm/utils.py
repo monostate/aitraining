@@ -1048,9 +1048,13 @@ def apply_chat_template_unified(
             # Extract tools from example if present (for tool definitions injection)
             tools = example.get("tools", None)
 
-            # Extract prompt (all messages except last, preserving tool_calls if present)
+            # Extract prompt: use explicit prompt column if available (multi-turn),
+            # otherwise fall back to chosen[:-1] (single-turn)
             # Strip BOS to prevent double BOS when tokenizer adds it during training
-            prompt_messages = chosen_messages[:-1]
+            if "prompt" in example and isinstance(example.get("prompt"), list) and len(example["prompt"]) > 0:
+                prompt_messages = example["prompt"]
+            else:
+                prompt_messages = chosen_messages[:-1]
             prompt_conv = Conversation(messages=[_message_from_dict(m, Message) for m in prompt_messages])
             example["prompt"] = strip_bos_token(
                 renderer.render_conversation(prompt_conv, tools=tools), renderer.tokenizer

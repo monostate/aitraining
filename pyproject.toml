@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aitraining"
-version = "0.0.45"
+version = "0.0.46"
 description = "Advanced Machine Learning Training Platform - IN DEVELOPMENT"
 readme = "README.md"
 requires-python = ">=3.8"

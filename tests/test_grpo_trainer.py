@@ -630,3 +630,30 @@ class TestORPOMultiTurnPrompt:
         # Prompt should only contain "Hello" user message
         assert "Hello" in result["prompt"]
         assert "How are you" not in result["prompt"]
+
+
+class TestORPODPOConfigCompat:
+    """Verify ORPOConfig/DPOConfig don't receive removed kwargs."""
+
+    def test_orpo_config_no_max_prompt_length(self):
+        """ORPOConfig in TRL 0.28.0 does not accept max_prompt_length."""
+        from trl import ORPOConfig
+
+        # Should work without max_prompt_length
+        cfg = ORPOConfig(output_dir="/tmp/test_orpo", max_length=512, max_completion_length=256)
+        assert cfg.max_length == 512
+        assert cfg.max_completion_length == 256
+
+    def test_orpo_config_rejects_max_prompt_length(self):
+        """ORPOConfig must reject max_prompt_length to confirm it was removed."""
+        from trl import ORPOConfig
+
+        with pytest.raises(TypeError, match="max_prompt_length"):
+            ORPOConfig(output_dir="/tmp/test_orpo", max_prompt_length=128)
+
+    def test_dpo_config_no_max_prompt_length_needed(self):
+        """DPOConfig should work without max_prompt_length."""
+        from trl import DPOConfig
+
+        cfg = DPOConfig(output_dir="/tmp/test_dpo", max_length=512)
+        assert cfg.max_length == 512

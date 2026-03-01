@@ -635,9 +635,16 @@ class TestORPOMultiTurnPrompt:
 class TestORPODPOConfigCompat:
     """Verify ORPOConfig/DPOConfig don't receive removed kwargs."""
 
+    def _get_orpo_config(self):
+        try:
+            from trl import ORPOConfig
+        except ImportError:
+            from trl.experimental.orpo import ORPOConfig
+        return ORPOConfig
+
     def test_orpo_config_no_max_prompt_length(self):
-        """ORPOConfig in TRL 0.28.0 does not accept max_prompt_length."""
-        from trl import ORPOConfig
+        """ORPOConfig in TRL >=0.28.0 does not accept max_prompt_length."""
+        ORPOConfig = self._get_orpo_config()
 
         # Should work without max_prompt_length
         cfg = ORPOConfig(output_dir="/tmp/test_orpo", max_length=512, max_completion_length=256)
@@ -646,7 +653,7 @@ class TestORPODPOConfigCompat:
 
     def test_orpo_config_rejects_max_prompt_length(self):
         """ORPOConfig must reject max_prompt_length to confirm it was removed."""
-        from trl import ORPOConfig
+        ORPOConfig = self._get_orpo_config()
 
         with pytest.raises(TypeError, match="max_prompt_length"):
             ORPOConfig(output_dir="/tmp/test_orpo", max_prompt_length=128)

@@ -1,6 +1,9 @@
 from peft import LoraConfig
 from transformers.trainer_callback import PrinterCallback
-from trl import ORPOConfig, ORPOTrainer
+try:
+    from trl import ORPOConfig, ORPOTrainer
+except ImportError:
+    from trl.experimental.orpo import ORPOConfig, ORPOTrainer
 
 from autotrain import logger
 from autotrain.trainers.clm import utils

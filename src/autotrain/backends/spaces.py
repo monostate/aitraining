@@ -72,6 +72,7 @@ class SpaceRunner(BaseBackend):
             space_sdk="docker",
             space_hardware=self.available_hardware[self.backend],
             private=True,
+            exist_ok=True,
         )
         self._add_secrets(api, space_id)
         api.set_space_sleep_time(repo_id=space_id, sleep_time=604800)

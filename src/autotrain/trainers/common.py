@@ -367,7 +367,7 @@ class UploadLogs(TrainerCallback):
                 else:
                     project_basename = os.path.basename(self.config.project_name.rstrip("/"))
                     self.repo_id = f"{self.config.username}/{project_basename}"
-                self.api.create_repo(repo_id=self.repo_id, repo_type="model", private=True)
+                self.api.create_repo(repo_id=self.repo_id, repo_type="model", private=True, exist_ok=True)
 
     def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         if self.config.push_to_hub is False:

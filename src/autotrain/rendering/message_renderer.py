@@ -427,32 +427,34 @@ class TokenizerNativeRenderer(MessageRenderer):
         if self._supports_tool_calls is not None:
             return self._supports_tool_calls
 
-        # Test with a minimal tool_calls message
-        test_messages = [
-            {"role": "user", "content": "test"},
-            {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": "call_123",
-                        "type": "function",
-                        "function": {"name": "test_func", "arguments": "{}"},
-                    }
-                ],
-            },
-        ]
+        # Test with a minimal tool_calls message.
+        # Some models (e.g. Qwen3.5) use arguments|items in their template,
+        # which requires a dict. Others expect a JSON string. Try both.
+        for args_value in ["{}", {}]:
+            test_messages = [
+                {"role": "user", "content": "test"},
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_123",
+                            "type": "function",
+                            "function": {"name": "test_func", "arguments": args_value},
+                        }
+                    ],
+                },
+            ]
 
-        try:
-            result_text = self.tokenizer.apply_chat_template(test_messages, tokenize=False)
-            # Check if the tool call information appears in output
-            if "test_func" in result_text or "call_123" in result_text:
-                self._supports_tool_calls = True
-            else:
-                self._supports_tool_calls = False
-        except Exception:
-            self._supports_tool_calls = False
+            try:
+                result_text = self.tokenizer.apply_chat_template(test_messages, tokenize=False)
+                if "test_func" in result_text or "call_123" in result_text:
+                    self._supports_tool_calls = True
+                    return self._supports_tool_calls
+            except Exception:
+                continue
 
+        self._supports_tool_calls = False
         return self._supports_tool_calls
 
     def _check_tool_role_support(self) -> bool:

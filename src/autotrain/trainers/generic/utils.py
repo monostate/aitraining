@@ -27,6 +27,7 @@ def create_dataset_repo(username, project_name, script_path, token):
         repo_id=repo_id,
         repo_type="dataset",
         private=True,
+        exist_ok=True,
     )
     logger.info("Uploading dataset...")
     api.upload_folder(

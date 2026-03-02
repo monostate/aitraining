@@ -82,33 +82,33 @@ def check_tool_calls_support(tokenizer: AutoTokenizer) -> bool:
     if tokenizer_id in _tool_calls_support_cache:
         return _tool_calls_support_cache[tokenizer_id]
 
-    # Test with a minimal tool_calls message
-    test_messages = [
-        {"role": "user", "content": "test"},
-        {
-            "role": "assistant",
-            "content": None,  # Often None when tool_calls is present
-            "tool_calls": [
-                {
-                    "id": "call_123",
-                    "type": "function",
-                    "function": {"name": "test_func", "arguments": "{}"},
-                }
-            ],
-        },
-    ]
+    # Test with a minimal tool_calls message.
+    # Some models (e.g. Qwen3.5) use arguments|items in their template,
+    # which requires a dict. Others expect a JSON string. Try both.
+    result = False
+    for args_value in ["{}", {}]:
+        test_messages = [
+            {"role": "user", "content": "test"},
+            {
+                "role": "assistant",
+                "content": None,  # Often None when tool_calls is present
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "test_func", "arguments": args_value},
+                    }
+                ],
+            },
+        ]
 
-    try:
-        result_text = tokenizer.apply_chat_template(test_messages, tokenize=False)
-        # Check if the tool call information appears in output (model handled it)
-        # If it just silently dropped it, we should serialize instead
-        if "test_func" in result_text or "call_123" in result_text:
-            result = True
-        else:
-            # Tokenizer didn't include tool_calls in output - doesn't support it
-            result = False
-    except Exception:
-        result = False
+        try:
+            result_text = tokenizer.apply_chat_template(test_messages, tokenize=False)
+            if "test_func" in result_text or "call_123" in result_text:
+                result = True
+                break
+        except Exception:
+            continue
 
     _tool_calls_support_cache[tokenizer_id] = result
     return result

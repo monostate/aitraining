@@ -481,6 +481,18 @@ def train(config):
                 processing_class=tokenizer,
             )
 
+    # TRL's SFTTrainer casts trainable adapter params to bf16 for quantized PEFT
+    # models. That recommendation breaks on T4-class GPUs when the job explicitly
+    # requested fp16, because GradScaler then tries to unscale bf16 gradients.
+    if (
+        getattr(config, "peft", False)
+        and getattr(config, "quantization", None) in {"int4", "int8"}
+        and getattr(config, "mixed_precision", None) == "fp16"
+    ):
+        for param in trainer.model.parameters():
+            if param.requires_grad:
+                param.data = param.data.to(torch.float16)
+
     trainer.remove_callback(PrinterCallback)
     trainer.train(resume_from_checkpoint=utils.get_resume_checkpoint(config))
     utils.post_training_steps(config, trainer)

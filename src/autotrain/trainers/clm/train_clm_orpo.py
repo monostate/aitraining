@@ -1,4 +1,5 @@
 from peft import LoraConfig
+from transformers import AutoProcessor
 from transformers.trainer_callback import PrinterCallback
 try:
     from trl import ORPOConfig, ORPOTrainer
@@ -9,6 +10,7 @@ from autotrain import logger
 from autotrain.trainers.clm import utils
 from autotrain.trainers.clm.params import LLMTrainingParams
 from autotrain.trainers.clm.sweep_utils import with_sweep
+from autotrain.trainers.clm.vlm_orpo_trainer import VLMORPOTrainer
 
 
 @with_sweep
@@ -17,11 +19,21 @@ def train(config):
     if isinstance(config, dict):
         config = LLMTrainingParams(**config)
 
+    is_vlm = bool(config.image_column)
+
     # process_input_data() handles column validation internally before renaming
     train_data, valid_data = utils.process_input_data(config)
 
     tokenizer = utils.get_tokenizer(config)
-    train_data, valid_data = utils.process_data_with_chat_template(config, tokenizer, train_data, valid_data)
+
+    if is_vlm:
+        logger.info(f"VLM ORPO mode: loading AutoProcessor for {config.model}")
+        processor = AutoProcessor.from_pretrained(config.model, token=config.token, trust_remote_code=True)
+        # Skip chat template processing - DataCollatorForVisionPreference handles it
+        logger.info("Skipping chat template processing for VLM (handled by DataCollatorForVisionPreference)")
+    else:
+        processor = None
+        train_data, valid_data = utils.process_data_with_chat_template(config, tokenizer, train_data, valid_data)
 
     logging_steps = utils.configure_logging_steps(config, train_data, valid_data)
     training_args = utils.configure_training_args(config, logging_steps)
@@ -69,11 +81,12 @@ def train(config):
         compute_metrics=compute_metrics,
     )
 
-    trainer = ORPOTrainer(
+    TrainerClass = VLMORPOTrainer if is_vlm else ORPOTrainer
+    trainer = TrainerClass(
         **trainer_args,
         train_dataset=train_data,
         eval_dataset=valid_data,
-        processing_class=tokenizer,
+        processing_class=processor if is_vlm else tokenizer,
         peft_config=peft_config if config.peft else None,
     )
 

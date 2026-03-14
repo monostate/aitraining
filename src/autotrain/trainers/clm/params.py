@@ -164,6 +164,7 @@ class LLMTrainingParams(AutoTrainParams):
     prompt_text_column: Optional[str] = Field(None, title="Column name for the prompt text")
     text_column: str = Field("text", title="Column name for the text data")
     rejected_text_column: Optional[str] = Field(None, title="Column name for the rejected text data")
+    image_column: Optional[str] = Field(None, title="Image column for VLM preference training (ORPO/DPO)")
 
     # dataset conversion
     auto_convert_dataset: bool = Field(False, title="Automatically detect and convert dataset format to messages")

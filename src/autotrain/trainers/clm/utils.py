@@ -1519,6 +1519,18 @@ def process_input_data(config):
         if not (config.prompt_text_column == "prompt" and config.prompt_text_column in train_data.column_names):
             train_data = train_data.rename_column(config.prompt_text_column, "prompt")
 
+    # Rename image column to "images" for VLM preference training (TRL's expected name)
+    if getattr(config, "image_column", None) and config.trainer in ("dpo", "orpo"):
+        if config.image_column in train_data.column_names:
+            if config.image_column != "images":
+                train_data = train_data.rename_column(config.image_column, "images")
+                logger.info(f"Renamed image column '{config.image_column}' -> 'images' in training data")
+        else:
+            raise ValueError(
+                f"Image column '{config.image_column}' not found in training data. "
+                f"Available columns: {train_data.column_names}"
+            )
+
     if config.valid_split is not None:
         # Check if this is a converted dataset (from auto_convert_dataset flow)
         if config.data_path.endswith("data_converted") or "data_converted" in config.data_path:
@@ -1579,6 +1591,18 @@ def process_input_data(config):
         if config.trainer in ("dpo", "reward"):
             if not (config.prompt_text_column == "prompt" and config.prompt_text_column in valid_data.column_names):
                 valid_data = valid_data.rename_column(config.prompt_text_column, "prompt")
+
+        # Rename image column in validation data for VLM
+        if getattr(config, "image_column", None) and config.trainer in ("dpo", "orpo"):
+            if config.image_column in valid_data.column_names:
+                if config.image_column != "images":
+                    valid_data = valid_data.rename_column(config.image_column, "images")
+                    logger.info(f"Renamed image column '{config.image_column}' -> 'images' in validation data")
+            else:
+                logger.warning(
+                    f"Image column '{config.image_column}' not found in validation data, "
+                    f"VLM features may not work for evaluation"
+                )
     else:
         valid_data = None
 

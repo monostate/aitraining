@@ -1411,7 +1411,12 @@ def post_training_steps(config, trainer):
                     project_basename = os.path.basename(config.project_name.rstrip("/"))
                     repo_id = f"{config.username}/{project_basename}"
                 logger.info(f"Ensuring repo exists: {repo_id}")
-                api.create_repo(repo_id=repo_id, repo_type="model", private=True, exist_ok=True)
+                api.create_repo(
+                    repo_id=repo_id,
+                    repo_type="model",
+                    private=getattr(config, "hub_private", True),
+                    exist_ok=True,
+                )
                 # Scrub HF tokens from log files before upload to prevent secret scanning rejection
                 _scrub_tokens_from_logs(config.project_name, config.token)
                 logger.info(f"Uploading folder '{config.project_name}' to {repo_id}...")

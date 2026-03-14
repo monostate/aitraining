@@ -244,6 +244,7 @@ class AutoTrainParams(BaseModel):
     # W&B Visualizer
     wandb_visualizer: Optional[bool] = Field(None, title="Enable W&B visualizer (LEET)")
     wandb_token: Optional[str] = Field(None, title="W&B API Token")
+    hub_private: bool = Field(True, title="Whether Hugging Face Hub repos should be private")
 
     class Config:
         protected_namespaces = ()
@@ -377,7 +378,11 @@ class UploadLogs(TrainerCallback):
                     project_basename = os.path.basename(self.config.project_name.rstrip("/"))
                     self.repo_id = f"{self.config.username}/{project_basename}"
                 try:
-                    self.api.create_repo(repo_id=self.repo_id, repo_type="model", private=True)
+                    self.api.create_repo(
+                        repo_id=self.repo_id,
+                        repo_type="model",
+                        private=getattr(self.config, "hub_private", True),
+                    )
                 except Exception as e:
                     if "409" in str(e) or "Conflict" in str(e):
                         # Repo already exists (e.g. from a previous training run).
@@ -391,7 +396,11 @@ class UploadLogs(TrainerCallback):
                         logger.warning(
                             f"Repo already exists. Creating versioned repo: {self.repo_id}"
                         )
-                        self.api.create_repo(repo_id=self.repo_id, repo_type="model", private=True)
+                        self.api.create_repo(
+                            repo_id=self.repo_id,
+                            repo_type="model",
+                            private=getattr(self.config, "hub_private", True),
+                        )
                         # Propagate versioned repo_id to config so final push_to_hub uses it too
                         self.config.repo_id = self.repo_id
                     else:

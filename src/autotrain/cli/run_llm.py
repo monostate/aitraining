@@ -265,6 +265,7 @@ FIELD_SCOPES = {
     "username": ["all"],
     "token": ["all"],
     "repo_id": ["all"],
+    "hub_private": ["all"],
     "wandb_token": ["all"],
     "unsloth": ["all"],
     # DPO/ORPO specific
@@ -274,6 +275,8 @@ FIELD_SCOPES = {
     "max_completion_length": ["dpo", "orpo", "sft", "default"],
     "prompt_text_column": ["dpo", "orpo"],
     "rejected_text_column": ["dpo", "orpo"],
+    # VLM preference training (ORPO/DPO with images)
+    "image_column": ["dpo", "orpo"],
     # Distillation specific
     "use_distillation": ["default", "sft"],
     "teacher_model": ["default", "sft"],

@@ -9,7 +9,6 @@ Ports the VLM plumbing from DPOTrainer to ORPOTrainer:
 """
 
 import torch
-import torch.nn as nn
 
 from transformers import ProcessorMixin, PreTrainedTokenizerBase
 
@@ -21,7 +20,25 @@ except ImportError:
     from trl.experimental.orpo import ORPOTrainer
 
 from trl.trainer.dpo_trainer import DataCollatorForVisionPreference
-from trl.trainer.utils import selective_log_softmax
+
+
+def _chunked_per_token_logps(logits: torch.Tensor, labels: torch.Tensor, chunk_size: int = 1024) -> torch.Tensor:
+    """Per-token log-probs at label positions, computed in seq-dim chunks.
+
+    Avoids the ~11 GB fp32 logsumexp temp that ``selective_log_softmax`` produces over the full
+    [seq, vocab=248K] tensor on long VLM sequences. Each chunk's intermediate stays bounded by
+    ``chunk_size * vocab * 4`` bytes (~1 GB at chunk_size=1024, vocab=248K).
+    """
+    B, S, _ = logits.shape
+    out = torch.empty(B, S, device=logits.device, dtype=logits.dtype)
+    safe_idx = labels.clamp(min=0).unsqueeze(-1)
+    for start in range(0, S, chunk_size):
+        end = min(start + chunk_size, S)
+        chunk = logits[:, start:end, :]
+        gathered = chunk.gather(-1, safe_idx[:, start:end, :]).squeeze(-1)
+        lse = torch.logsumexp(chunk, dim=-1)
+        out[:, start:end] = gathered - lse
+    return out
 
 
 class VLMORPOTrainer(ORPOTrainer):
@@ -110,6 +127,17 @@ class VLMORPOTrainer(ORPOTrainer):
         input_ids = batch["input_ids"]
         attention_mask = batch["attention_mask"]
         completion_mask = batch["completion_mask"]
+
+        # DataCollatorForVisionPreference does not honor max_length / max_completion_length, so we
+        # cap here. Without this, a single long image-prompt sequence drives the chunked logsumexp
+        # (and the model forward) over a [2*B, seq, vocab] tensor that OOMs even after the
+        # CrossEntropyLoss fix.
+        max_len = getattr(self.args, "max_length", None) or 8192
+        if input_ids.shape[1] > max_len:
+            input_ids = input_ids[:, :max_len]
+            attention_mask = attention_mask[:, :max_len]
+            completion_mask = completion_mask[:, :max_len]
+
         batch_size = input_ids.shape[0] // 2  # half chosen, half rejected
 
         # Build model kwargs with VLM keys
@@ -137,25 +165,26 @@ class VLMORPOTrainer(ORPOTrainer):
         shift_labels = labels[..., 1:].contiguous()
         shift_completion_mask = completion_mask[..., 1:].contiguous()
 
-        # NLL loss on chosen only (first B examples)
-        chosen_logits = shift_logits[:batch_size]
-        chosen_labels = shift_labels[:batch_size]
-        loss_fct = nn.CrossEntropyLoss()
-        policy_nll_loss = loss_fct(
-            chosen_logits.reshape(-1, chosen_logits.shape[-1]),
-            chosen_labels.reshape(-1).to(chosen_logits.device),
-        )
-
-        # Log probs per token using selective_log_softmax
-        per_token_logps = selective_log_softmax(shift_logits, shift_labels.clamp(min=0))
-        per_token_logps[shift_completion_mask == 0] = 0.0
+        # Chunked log-softmax: TRL's selective_log_softmax materializes a full [seq, vocab=248K]
+        # fp32 logsumexp temp (~11 GB), and CrossEntropyLoss allocates the same again as a grad
+        # tensor. _chunked_per_token_logps avoids both by streaming the seq dimension.
+        per_token_logps = _chunked_per_token_logps(shift_logits, shift_labels)
+        per_token_logps = per_token_logps.masked_fill(shift_completion_mask == 0, 0.0)
         all_logps = per_token_logps.sum(dim=1)
 
         policy_chosen_logps = all_logps[:batch_size]
         policy_rejected_logps = all_logps[batch_size:]
 
+        # NLL on chosen, derived from per_token_logps. Equivalent to
+        # CrossEntropyLoss(ignore_index=-100) over the chosen completion tokens, but reuses the
+        # already-computed log-probs instead of allocating a second [seq, vocab] gradient tensor.
+        chosen_per_token_logps = per_token_logps[:batch_size]
+        chosen_completion_mask = shift_completion_mask[:batch_size]
+        num_chosen_tokens = chosen_completion_mask.sum().clamp(min=1)
+        policy_nll_loss = -chosen_per_token_logps.sum() / num_chosen_tokens
+
         # Mean logits for metrics
-        policy_chosen_logits = chosen_logits.detach().mean()
+        policy_chosen_logits = shift_logits[:batch_size].detach().mean()
         policy_rejected_logits = shift_logits[batch_size:].detach().mean()
 
         # ORPO odds ratio loss

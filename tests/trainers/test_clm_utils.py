@@ -268,6 +268,81 @@ class TestModelDtypeLoading:
         assert "device_map" not in model_kwargs
 
 
+class TestDeepSpeedZero3DeviceMap:
+    """Tests that ZeRO-3 skips device_map so DeepSpeed can manage placement."""
+
+    @staticmethod
+    def _resolve_device_map(env, world_size, cuda_available=True):
+        """Replicates the device_map branch in autotrain.trainers.clm.utils.get_model."""
+        import os
+        from unittest.mock import patch
+
+        model_kwargs = {}
+        with patch.dict(os.environ, env, clear=False):
+            if cuda_available:
+                ds_zero3 = (
+                    os.environ.get("ACCELERATE_USE_DEEPSPEED", "False").lower() == "true"
+                    and os.environ.get("ACCELERATE_DEEPSPEED_ZERO_STAGE", "0") == "3"
+                )
+                if ds_zero3:
+                    pass
+                elif world_size > 1:
+                    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+                    model_kwargs["device_map"] = {"": local_rank}
+                else:
+                    model_kwargs["device_map"] = "auto"
+        return model_kwargs
+
+    def test_zero3_skips_device_map_in_multi_gpu(self):
+        """ZeRO-3 + WORLD_SIZE>1 must NOT set device_map (DeepSpeed manages placement)."""
+        kwargs = self._resolve_device_map(
+            env={
+                "ACCELERATE_USE_DEEPSPEED": "true",
+                "ACCELERATE_DEEPSPEED_ZERO_STAGE": "3",
+                "LOCAL_RANK": "1",
+            },
+            world_size=4,
+        )
+        assert "device_map" not in kwargs
+
+    def test_zero3_case_insensitive_env(self):
+        """ACCELERATE_USE_DEEPSPEED=TRUE (any case) should be recognized."""
+        kwargs = self._resolve_device_map(
+            env={
+                "ACCELERATE_USE_DEEPSPEED": "TRUE",
+                "ACCELERATE_DEEPSPEED_ZERO_STAGE": "3",
+                "LOCAL_RANK": "0",
+            },
+            world_size=2,
+        )
+        assert "device_map" not in kwargs
+
+    def test_zero2_still_sets_device_map(self):
+        """ZeRO-2 (not stage 3) should still pin device_map per local_rank."""
+        kwargs = self._resolve_device_map(
+            env={
+                "ACCELERATE_USE_DEEPSPEED": "true",
+                "ACCELERATE_DEEPSPEED_ZERO_STAGE": "2",
+                "LOCAL_RANK": "1",
+            },
+            world_size=2,
+        )
+        assert kwargs["device_map"] == {"": 1}
+
+    def test_deepspeed_disabled_still_sets_device_map(self):
+        """Multi-GPU without DeepSpeed should pin device_map per local_rank."""
+        kwargs = self._resolve_device_map(
+            env={"LOCAL_RANK": "2"},
+            world_size=4,
+        )
+        assert kwargs["device_map"] == {"": 2}
+
+    def test_single_gpu_uses_auto(self):
+        """Single GPU without DeepSpeed should fall back to device_map='auto'."""
+        kwargs = self._resolve_device_map(env={}, world_size=1)
+        assert kwargs["device_map"] == "auto"
+
+
 class TestValidateRequiredColumns:
     """Tests for validate_required_columns with helpful hints."""
 

@@ -489,9 +489,18 @@ class HyperparameterSweep:
                 entity=entity,
             )
             logger.info(f"Created W&B sweep: {sweep_id} in project '{project}'")
-            logger.info(
-                f"View sweep dashboard at: https://wandb.ai/{entity or 'your-entity'}/{project}/sweeps/{sweep_id}"
-            )
+            resolved_entity = entity
+            if not resolved_entity:
+                try:
+                    resolved_entity = wandb.Api().default_entity
+                except Exception:
+                    resolved_entity = None
+            if resolved_entity:
+                logger.info(
+                    f"View sweep dashboard at: https://wandb.ai/{resolved_entity}/{project}/sweeps/{sweep_id}"
+                )
+            else:
+                logger.info(f"View sweep dashboard at: https://wandb.ai/<your-entity>/{project}/sweeps/{sweep_id}")
             return sweep_id
         except Exception as e:
             logger.warning(f"Failed to create W&B sweep: {e}")
@@ -988,9 +997,12 @@ def run_training(params, task_id, local: bool = False, wait: bool = False) -> in
         f.write("Will compute launch command next...\n")
         f.flush()
 
-    # Set GPU count override BEFORE building command to avoid torch/CUDA init in parent
-    # But also check for MPS and quantization compatibility issues
-    if "AUTOTRAIN_FORCE_NUM_GPUS" not in os.environ:
+    # Set launcher-process-count override BEFORE building command to avoid torch/CUDA init in
+    # parent. (This controls how many processes accelerate spawns, not GPU visibility — set
+    # CUDA_VISIBLE_DEVICES for that.) Also check for MPS and quantization compatibility issues.
+    from autotrain.commands import FORCE_NUM_PROCESSES_ENV, get_forced_num_processes
+
+    if get_forced_num_processes() is None:
         import torch
 
         cuda_available = torch.cuda.is_available()
@@ -1027,7 +1039,7 @@ def run_training(params, task_id, local: bool = False, wait: bool = False) -> in
         else:
             forced = "0"
 
-        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = forced
+        os.environ[FORCE_NUM_PROCESSES_ENV] = forced
 
     # Build command - this may set additional environment variables (e.g., for MPS handling)
     cmd = [str(c) for c in launch_command(params=params)]

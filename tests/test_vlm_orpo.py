@@ -271,6 +271,112 @@ class TestTrainerSelection:
 # Test: VLMORPOTrainer import
 # =============================================================================
 
+def _try_import_chunked():
+    try:
+        from autotrain.trainers.clm.vlm_orpo_trainer import _chunked_per_token_logps
+
+        return _chunked_per_token_logps
+    except ImportError:
+        return None
+
+
+class TestVLMORPONLLEquivalence:
+    """Regression guard for the OOM fix at vlm_orpo_trainer.py.
+
+    The chunked log-softmax + per_token_logps NLL must match
+    nn.CrossEntropyLoss(ignore_index=-100). The original code allocated a
+    [seq, vocab=248K] fp32 grad tensor (~11 GB) via CE plus a same-shape
+    logsumexp temp via selective_log_softmax — the chunked replacement
+    streams the seq dim to bound the intermediate.
+    """
+
+    pytestmark = pytest.mark.skipif(
+        _try_import_chunked() is None,
+        reason="vlm_orpo_trainer requires a TRL build with DataCollatorForVisionPreference",
+    )
+
+    def _compute_old_nll(self, shift_logits_chosen, shift_labels_chosen):
+        """Reference: original CrossEntropyLoss path."""
+        import torch.nn as nn
+
+        loss_fct = nn.CrossEntropyLoss()
+        return loss_fct(
+            shift_logits_chosen.reshape(-1, shift_logits_chosen.shape[-1]),
+            shift_labels_chosen.reshape(-1),
+        )
+
+    def _compute_new_nll(self, shift_logits_chosen, shift_labels_chosen, shift_completion_mask_chosen, chunk_size=1024):
+        """New path: chunked per-token logps + completion_mask normalization."""
+        from autotrain.trainers.clm.vlm_orpo_trainer import _chunked_per_token_logps
+
+        per_token_logps = _chunked_per_token_logps(shift_logits_chosen, shift_labels_chosen, chunk_size=chunk_size)
+        per_token_logps = per_token_logps.masked_fill(shift_completion_mask_chosen == 0, 0.0)
+        num_chosen_tokens = shift_completion_mask_chosen.sum().clamp(min=1)
+        return -per_token_logps.sum() / num_chosen_tokens
+
+    def test_nll_matches_cross_entropy_with_partial_mask(self):
+        import torch
+
+        torch.manual_seed(0)
+        batch, seq, vocab = 2, 12, 50
+        logits = torch.randn(batch, seq, vocab)
+        labels = torch.randint(0, vocab, (batch, seq))
+        # Mask the first 3 positions of each sample (prompt tokens)
+        completion_mask = torch.ones(batch, seq, dtype=torch.long)
+        completion_mask[:, :3] = 0
+        labels = labels.masked_fill(completion_mask == 0, -100)
+
+        old = self._compute_old_nll(logits, labels)
+        new = self._compute_new_nll(logits, labels, completion_mask)
+
+        assert torch.allclose(old, new, atol=1e-5), f"old={old.item()} new={new.item()}"
+
+    def test_nll_matches_cross_entropy_with_no_mask(self):
+        """When all tokens are completion tokens, NLL should still match."""
+        import torch
+
+        torch.manual_seed(1)
+        batch, seq, vocab = 3, 8, 32
+        logits = torch.randn(batch, seq, vocab)
+        labels = torch.randint(0, vocab, (batch, seq))
+        completion_mask = torch.ones(batch, seq, dtype=torch.long)
+
+        old = self._compute_old_nll(logits, labels)
+        new = self._compute_new_nll(logits, labels, completion_mask)
+
+        assert torch.allclose(old, new, atol=1e-5)
+
+    def test_nll_handles_all_masked_without_nan(self):
+        """clamp(min=1) protects against div-by-zero when no completion tokens exist."""
+        import torch
+
+        logits = torch.randn(1, 4, 10)
+        labels = torch.full((1, 4), -100, dtype=torch.long)
+        completion_mask = torch.zeros(1, 4, dtype=torch.long)
+
+        new = self._compute_new_nll(logits, labels, completion_mask)
+        # All per_token_logps masked to 0 → numerator is 0 → loss is 0, not NaN
+        assert not torch.isnan(new)
+        assert new.item() == 0.0
+
+    def test_chunked_logps_invariant_to_chunk_size(self):
+        """The chunked formula must be numerically invariant to chunk_size."""
+        import torch
+        from autotrain.trainers.clm.vlm_orpo_trainer import _chunked_per_token_logps
+
+        torch.manual_seed(2)
+        # seq=20 chosen so multiple chunk boundaries land mid-sequence
+        logits = torch.randn(2, 20, 64)
+        labels = torch.randint(0, 64, (2, 20))
+
+        full = _chunked_per_token_logps(logits, labels, chunk_size=1024)
+        small = _chunked_per_token_logps(logits, labels, chunk_size=3)
+        single = _chunked_per_token_logps(logits, labels, chunk_size=1)
+
+        assert torch.allclose(full, small, atol=1e-6)
+        assert torch.allclose(full, single, atol=1e-6)
+
+
 class TestVLMORPOImport:
     def test_import(self):
         """VLMORPOTrainer can be imported."""

@@ -307,9 +307,10 @@ class AutoTrainParams(BaseModel):
                 # This keeps training outputs separate from the server directory
                 base_dir = os.environ.get("AUTOTRAIN_PROJECTS_DIR")
                 if base_dir is None:
-                    # Create trainings directory at same level as server directory
-                    server_parent = os.path.dirname(os.getcwd())
-                    base_dir = os.path.join(server_parent, "trainings")
+                    # Default to ~/trainings; the previous default (<cwd_parent>/trainings)
+                    # resolves to /home/trainings on bare-metal, which isn't writable.
+                    # Override via AUTOTRAIN_PROJECTS_DIR.
+                    base_dir = os.path.join(os.path.expanduser("~"), "trainings")
 
                 # Create base directory if it doesn't exist
                 os.makedirs(base_dir, exist_ok=True)

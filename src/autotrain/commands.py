@@ -18,6 +18,37 @@ from autotrain.trainers.token_classification.params import TokenClassificationPa
 from autotrain.trainers.vlm.params import VLMTrainingParams
 
 
+FORCE_NUM_PROCESSES_ENV = "AUTOTRAIN_FORCE_NUM_PROCESSES"
+LEGACY_FORCE_NUM_PROCESSES_ENV = "AUTOTRAIN_FORCE_NUM_GPUS"
+_legacy_force_num_processes_warned = False
+
+
+def get_forced_num_processes(env=None):
+    """Return the forced launcher process count as a string, or None if unset.
+
+    Controls how many processes ``accelerate launch`` spawns — NOT GPU
+    visibility. To constrain which devices are seen, set ``CUDA_VISIBLE_DEVICES``.
+
+    Reads ``AUTOTRAIN_FORCE_NUM_PROCESSES`` first; falls back to the legacy
+    ``AUTOTRAIN_FORCE_NUM_GPUS`` with a one-time deprecation warning.
+    """
+    source = os.environ if env is None else env
+    val = source.get(FORCE_NUM_PROCESSES_ENV)
+    if val is not None:
+        return val
+    val = source.get(LEGACY_FORCE_NUM_PROCESSES_ENV)
+    if val is not None:
+        global _legacy_force_num_processes_warned
+        if not _legacy_force_num_processes_warned:
+            logger.warning(
+                f"{LEGACY_FORCE_NUM_PROCESSES_ENV} is deprecated; it controls launcher "
+                f"process count, not GPU visibility. Use {FORCE_NUM_PROCESSES_ENV} instead. "
+                "To restrict visible devices, set CUDA_VISIBLE_DEVICES."
+            )
+            _legacy_force_num_processes_warned = True
+    return val
+
+
 CPU_COMMAND = [
     sys.executable,
     "-m",
@@ -124,11 +155,13 @@ def launch_command(params):
     """
 
     params.project_name = shlex.split(params.project_name)[0]
-    # Allow forcing GPU count to avoid importing torch (which can initialize CUDA in parent process)
-    forced_num_gpus = os.environ.get("AUTOTRAIN_FORCE_NUM_GPUS")
-    if forced_num_gpus is not None:
+    # Allow forcing launcher process count to avoid importing torch (which can initialize CUDA in
+    # parent process). Note: this controls how many processes accelerate spawns, NOT GPU visibility —
+    # set CUDA_VISIBLE_DEVICES to constrain which devices are seen.
+    forced_num_processes = get_forced_num_processes()
+    if forced_num_processes is not None:
         try:
-            num_gpus = int(forced_num_gpus)
+            num_gpus = int(forced_num_processes)
         except Exception:
             num_gpus = 1
         cuda_available = num_gpus > 0

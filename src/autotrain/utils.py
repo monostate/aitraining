@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from autotrain import logger
-from autotrain.commands import launch_command
+from autotrain.commands import FORCE_NUM_PROCESSES_ENV, get_forced_num_processes, launch_command
 from autotrain.trainers.clm.params import LLMTrainingParams
 from autotrain.trainers.extractive_question_answering.params import ExtractiveQuestionAnsweringParams
 from autotrain.trainers.generic.params import GenericParams
@@ -175,11 +175,12 @@ def run_training(params, task_id, local=False, wait=False):
         f.write("Will compute launch command next...\n")
         f.flush()
 
-    # Set GPU count override BEFORE building command to avoid torch/CUDA init in parent
-    if "AUTOTRAIN_FORCE_NUM_GPUS" not in os.environ:
+    # Set launcher-process-count override BEFORE building command to avoid torch/CUDA init in
+    # parent. (This controls process count, not GPU visibility — set CUDA_VISIBLE_DEVICES for that.)
+    if get_forced_num_processes() is None:
         # Heuristic: if CUDA devices are exposed, assume 1; otherwise 0
         forced = "1" if os.environ.get("CUDA_VISIBLE_DEVICES") not in (None, "", "-1") else "0"
-        os.environ["AUTOTRAIN_FORCE_NUM_GPUS"] = forced
+        os.environ[FORCE_NUM_PROCESSES_ENV] = forced
 
     cmd = launch_command(params=params)
     cmd = [str(c) for c in cmd]
@@ -287,11 +288,9 @@ def run_training(params, task_id, local=False, wait=False):
     log_fh = open(log_path, "a", encoding="utf-8")
 
     # Avoid CUDA initialization in parent process by preventing torch import and CUDA context creation here
-    # Users can force GPU count via env if needed
-    if "AUTOTRAIN_FORCE_NUM_GPUS" not in env:
-        env["AUTOTRAIN_FORCE_NUM_GPUS"] = env.get(
-            "AUTOTRAIN_FORCE_NUM_GPUS", "1" if os.environ.get("CUDA_VISIBLE_DEVICES") else "0"
-        )
+    # Users can force the launcher process count via env if needed
+    if get_forced_num_processes(env=env) is None:
+        env[FORCE_NUM_PROCESSES_ENV] = "1" if os.environ.get("CUDA_VISIBLE_DEVICES") else "0"
 
     # Optionally force Python module launch instead of accelerate to avoid CLI/exec issues
     force_python = os.environ.get("AUTOTRAIN_FORCE_PYTHON_LAUNCH", "false").lower() in ("1", "true", "yes")

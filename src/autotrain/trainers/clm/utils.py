@@ -2393,8 +2393,12 @@ def get_model(config, tokenizer):
 
         # Set device map and dtype for proper placement
         if torch.cuda.is_available():
+            ds_zero3 = (os.environ.get("ACCELERATE_USE_DEEPSPEED", "False").lower() == "true"
+                        and os.environ.get("ACCELERATE_DEEPSPEED_ZERO_STAGE", "0") == "3")
             world_size = int(os.environ.get("WORLD_SIZE", "1"))
-            if world_size > 1:
+            if ds_zero3:
+                pass  # ZeRO-3 manages device placement itself
+            elif world_size > 1:
                 local_rank = int(os.environ.get("LOCAL_RANK", "0"))
                 model_kwargs["device_map"] = {"": local_rank}
             else:
@@ -2453,8 +2457,12 @@ def get_model(config, tokenizer):
 
         # Set device map and dtype for proper placement
         if torch.cuda.is_available():
+            ds_zero3 = (os.environ.get("ACCELERATE_USE_DEEPSPEED", "False").lower() == "true"
+                        and os.environ.get("ACCELERATE_DEEPSPEED_ZERO_STAGE", "0") == "3")
             world_size = int(os.environ.get("WORLD_SIZE", "1"))
-            if world_size > 1:
+            if ds_zero3:
+                pass  # ZeRO-3 manages device placement itself
+            elif world_size > 1:
                 local_rank = int(os.environ.get("LOCAL_RANK", "0"))
                 model_kwargs["device_map"] = {"": local_rank}
             else:
